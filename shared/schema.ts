@@ -25,9 +25,15 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginCredentials = z.infer<typeof loginSchema>;
 
 // Field types
-export type FieldType = "text" | "number" | "percentage" | "currency" | "select";
+export type FieldType = "text" | "number" | "percentage" | "currency" | "select" | "textarea";
 export type FieldFrequency = "weekly" | "monthly";
 export type FieldCategory = "kr1" | "kr2" | "kr3" | "northstar";
+
+// KR2 Status
+export type KR2Status = "pre-launch" | "post-launch";
+
+// KR3 Focus Areas
+export type KR3FocusArea = "onboarding" | "support" | "content" | "custom";
 
 // Field definition
 export interface FieldDefinition {
@@ -100,35 +106,98 @@ export const insertFinancialRecordSchema = financialRecordSchema.omit({ id: true
 export type FinancialRecord = z.infer<typeof financialRecordSchema>;
 export type InsertFinancialRecord = z.infer<typeof insertFinancialRecordSchema>;
 
-// Products data
-function generateFields(prefix: string): FieldDefinition[] {
+// KR1 Fields - Sales & Marketing (Actual/Target with calculated Percent)
+export interface KR1Fields {
+  tofActual: string;
+  tofTarget: string;
+  mofActual: string;
+  mofTarget: string;
+  bofActual: string;
+  bofTarget: string;
+  revenueActual: string;
+  revenueTarget: string;
+}
+
+// KR2 Pre-Launch Fields
+export interface KR2PreLaunchFields {
+  status: "pre-launch";
+  sprintName: string;
+  tasksCompleted: string;
+  tasksTotal: string;
+  blockersCount: string;
+  criticalBlockers: string;
+  blockerDetails: string;
+}
+
+// KR2 Post-Launch Fields
+export interface KR2PostLaunchFields {
+  status: "post-launch";
+  uptimeActual: string;
+  uptimeTarget: string;
+  responseTimeActual: string;
+  responseTimeTarget: string;
+  errorRateActual: string;
+  errorRateTarget: string;
+}
+
+export type KR2Fields = KR2PreLaunchFields | KR2PostLaunchFields;
+
+// KR3 Focus Area Fields
+export interface KR3OnboardingFields {
+  focusArea: "onboarding";
+  customersOnboarded: string;
+  onboardingTarget: string;
+  completionRate: string;
+  avgTimeToValue: string;
+  timeToValueTarget: string;
+}
+
+export interface KR3SupportFields {
+  focusArea: "support";
+  supportTickets: string;
+  avgResolutionTime: string;
+  resolutionTarget: string;
+  escalations: string;
+  csatScore: string;
+}
+
+export interface KR3ContentFields {
+  focusArea: "content";
+  blogPosts: string;
+  caseStudies: string;
+  webinars: string;
+  totalViews: string;
+  conversionRate: string;
+}
+
+export interface KR3CustomFields {
+  focusArea: "custom";
+  metric1Name: string;
+  metric1Value: string;
+  metric2Name: string;
+  metric2Value: string;
+  metric3Name: string;
+  metric3Value: string;
+  notes: string;
+}
+
+export type KR3Fields = KR3OnboardingFields | KR3SupportFields | KR3ContentFields | KR3CustomFields;
+
+// North Star Fields (unchanged from before)
+export interface NorthStarFields {
+  trend: string;
+  daysToRevenue: string;
+  daysToRevTarget: string;
+  revenueQuality: string;
+  customerConcPct: string;
+  churnRate: string;
+  gaapRevenue: string;
+  productScore: string;
+}
+
+// Products data - simplified field definitions for North Star only (KR1/KR2/KR3 handled separately)
+function generateNorthStarFields(prefix: string): FieldDefinition[] {
   return [
-    // KR1 - Sales & Marketing
-    { name: "TOF Actual", placeholder: `${prefix}_TOF_Actual`, type: "number", description: "Top of Funnel visitors", example: "1250", frequency: "weekly", category: "kr1" },
-    { name: "TOF Target", placeholder: `${prefix}_TOF_Target`, type: "number", description: "TOF target", example: "1500", frequency: "monthly", category: "kr1" },
-    { name: "TOF Percent", placeholder: `${prefix}_TOF_Percent`, type: "percentage", description: "TOF % of target", example: "83", frequency: "weekly", category: "kr1" },
-    { name: "MOF Actual", placeholder: `${prefix}_MOF_Actual`, type: "number", description: "Middle of Funnel leads", example: "125", frequency: "weekly", category: "kr1" },
-    { name: "MOF Target", placeholder: `${prefix}_MOF_Target`, type: "number", description: "MOF target", example: "150", frequency: "monthly", category: "kr1" },
-    { name: "MOF Percent", placeholder: `${prefix}_MOF_Percent`, type: "percentage", description: "MOF % of target", example: "83", frequency: "weekly", category: "kr1" },
-    { name: "BOF Actual", placeholder: `${prefix}_BOF_Actual`, type: "number", description: "Bottom of Funnel conversions", example: "12", frequency: "weekly", category: "kr1" },
-    { name: "BOF Target", placeholder: `${prefix}_BOF_Target`, type: "number", description: "BOF target", example: "15", frequency: "monthly", category: "kr1" },
-    { name: "BOF Percent", placeholder: `${prefix}_BOF_Percent`, type: "percentage", description: "BOF % of target", example: "80", frequency: "weekly", category: "kr1" },
-    { name: "Revenue Actual", placeholder: `${prefix}_Revenue_Actual`, type: "currency", description: "Actual revenue", example: "45000", frequency: "weekly", category: "kr1" },
-    { name: "Revenue Target", placeholder: `${prefix}_Revenue_Target`, type: "currency", description: "Revenue target", example: "50000", frequency: "monthly", category: "kr1" },
-    { name: "Revenue Percent", placeholder: `${prefix}_Revenue_Percent`, type: "percentage", description: "Revenue % of target", example: "90", frequency: "weekly", category: "kr1" },
-    // KR2 - Development
-    { name: "Sprint Velocity", placeholder: `${prefix}_Sprint_Actual`, type: "number", description: "Sprint velocity", example: "42", frequency: "weekly", category: "kr2" },
-    { name: "Sprint Target", placeholder: `${prefix}_Sprint_Target`, type: "number", description: "Sprint target", example: "50", frequency: "monthly", category: "kr2" },
-    { name: "Sprint Percent", placeholder: `${prefix}_Sprint_Percent`, type: "percentage", description: "Sprint % of target", example: "84", frequency: "weekly", category: "kr2" },
-    { name: "Bug Count", placeholder: `${prefix}_Bug_Actual`, type: "number", description: "Open bugs", example: "8", frequency: "weekly", category: "kr2" },
-    { name: "Bug Target", placeholder: `${prefix}_Bug_Target`, type: "number", description: "Bug target (max)", example: "5", frequency: "monthly", category: "kr2" },
-    { name: "Bug Percent", placeholder: `${prefix}_Bug_Percent`, type: "percentage", description: "Bug % of target", example: "160", frequency: "weekly", category: "kr2" },
-    // KR3 - Operations
-    { name: "Uptime Actual", placeholder: `${prefix}_Uptime_Actual`, type: "percentage", description: "System uptime", example: "99.8", frequency: "weekly", category: "kr3" },
-    { name: "Uptime Target", placeholder: `${prefix}_Uptime_Target`, type: "percentage", description: "Uptime target", example: "99.9", frequency: "monthly", category: "kr3" },
-    { name: "Response Time", placeholder: `${prefix}_Response_Actual`, type: "number", description: "Avg response (ms)", example: "125", frequency: "weekly", category: "kr3" },
-    { name: "Response Target", placeholder: `${prefix}_Response_Target`, type: "number", description: "Response target", example: "100", frequency: "monthly", category: "kr3" },
-    // North Star Metrics
     { name: "Trend", placeholder: `${prefix}_TREND`, type: "select", description: "Product trend", example: "up", frequency: "weekly", category: "northstar" },
     { name: "Days to Revenue", placeholder: `${prefix}_DAYS_TO_REV`, type: "number", description: "Days to revenue", example: "45", frequency: "weekly", category: "northstar" },
     { name: "Days to Rev Target", placeholder: `${prefix}_DAYS_TO_REV_TGT`, type: "number", description: "Target days", example: "30", frequency: "monthly", category: "northstar" },
@@ -141,11 +210,11 @@ function generateFields(prefix: string): FieldDefinition[] {
 }
 
 export const products: Product[] = [
-  { id: "stigviewer", name: "STIGViewer", slideNumber: 5, fields: generateFields("STIGViewer") },
-  { id: "deepfeedback", name: "DeepFeedback", slideNumber: 6, fields: generateFields("DeepFeedback") },
-  { id: "prmvp", name: "PRMVP", slideNumber: 7, fields: generateFields("PRMVP") },
-  { id: "sams", name: "SAMS", slideNumber: 8, fields: generateFields("SAMS") },
-  { id: "reggenome", name: "RegGenome", slideNumber: 9, fields: generateFields("RegGenome") },
+  { id: "stigviewer", name: "STIGViewer", slideNumber: 5, fields: generateNorthStarFields("STIGViewer") },
+  { id: "deepfeedback", name: "DeepFeedback", slideNumber: 6, fields: generateNorthStarFields("DeepFeedback") },
+  { id: "prmvp", name: "PRMVP", slideNumber: 7, fields: generateNorthStarFields("PRMVP") },
+  { id: "sams", name: "SAMS", slideNumber: 8, fields: generateNorthStarFields("SAMS") },
+  { id: "reggenome", name: "RegGenome", slideNumber: 9, fields: generateNorthStarFields("RegGenome") },
 ];
 
 export function getProduct(id: string): Product | undefined {
@@ -172,4 +241,24 @@ export function getCurrentWeekStart(): string {
 export function getCurrentMonthStart(): string {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+}
+
+// Calculate percentage with color coding
+export function calculatePercent(actual: number, target: number): { value: number; color: "green" | "yellow" | "red" } {
+  if (target <= 0) return { value: 0, color: "red" };
+  const percent = (actual / target) * 100;
+  let color: "green" | "yellow" | "red" = "red";
+  if (percent >= 100) color = "green";
+  else if (percent >= 80) color = "yellow";
+  return { value: Math.round(percent * 10) / 10, color };
+}
+
+// For metrics where lower is better (error rate, response time, etc)
+export function calculatePercentInverse(actual: number, target: number): { value: number; color: "green" | "yellow" | "red" } {
+  if (target <= 0) return { value: 0, color: "red" };
+  let color: "green" | "yellow" | "red" = "red";
+  if (actual <= target) color = "green";
+  else if (actual <= target * 1.2) color = "yellow";
+  const percent = (actual / target) * 100;
+  return { value: Math.round(percent * 10) / 10, color };
 }

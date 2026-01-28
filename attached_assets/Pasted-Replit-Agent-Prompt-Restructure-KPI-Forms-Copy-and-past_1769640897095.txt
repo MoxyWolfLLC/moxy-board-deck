@@ -1,0 +1,121 @@
+Replit Agent Prompt: Restructure KPI Forms
+Copy and paste this to Replit Agent:
+
+Major Form Restructure: KR1, KR2, KR3 Sections
+The current KPI forms need significant changes. Here's what each section should look like:
+
+KR1 - Sales & Marketing (RESTRUCTURE)
+Problem: Currently asks for both "Actual" and "Percent" values. Instead, it should ask for "Actual" and "Target", then AUTO-CALCULATE the percent.
+Current (wrong):
+
+TOF Actual, TOF Percent
+MOF Actual, MOF Percent
+BOF Actual, BOF Percent
+Revenue Actual, Revenue Percent
+
+New Structure:
+FieldTypeDescriptionTOF ActualNumberTop of Funnel visitors (actual)TOF TargetNumberTop of Funnel targetTOF PercentCalculated= (Actual / Target) × 100, display onlyMOF ActualNumberMiddle of Funnel leads (actual)MOF TargetNumberMiddle of Funnel targetMOF PercentCalculated= (Actual / Target) × 100, display onlyBOF ActualNumberBottom of Funnel conversions (actual)BOF TargetNumberBottom of Funnel targetBOF PercentCalculated= (Actual / Target) × 100, display onlyRevenue ActualCurrencyActual revenueRevenue TargetCurrencyRevenue targetRevenue PercentCalculated= (Actual / Target) × 100, display only
+UI Implementation:
+
+Show Actual and Target as input fields
+Show Percent as a read-only calculated field (grayed out or with different styling)
+Calculate percent in real-time as user types
+Display percent with color coding: Green (≥100%), Yellow (80-99%), Red (<80%)
+
+
+KR2 - Development (COMPLETE REDESIGN)
+Problem: Current fields (Sprint Velocity, Sprint Percent, Bug Count, Bug Percent) don't match what teams actually track.
+New Structure: Products are either PRE-LAUNCH or POST-LAUNCH. Show different fields based on product status.
+Add a Toggle/Dropdown at the top:
+"Product Status": [ ] Pre-Launch  [ ] Post-Launch
+If PRE-LAUNCH selected, show:
+FieldTypeDescriptionSprint NameTexte.g., "Sprint 3"Tasks CompletedNumberTasks done this sprintTasks TotalNumberTotal tasks in sprintSprint Progress %Calculated= (Completed / Total) × 100Blockers CountNumberNumber of blockersCritical BlockersNumberNumber of critical blockersBlocker DetailsText AreaDescribe blockers (optional)
+If POST-LAUNCH selected, show:
+FieldTypeDescriptionUptime ActualPercentSystem uptime (e.g., 99.8)Uptime TargetPercentTarget uptime (e.g., 99.5)Uptime StatusCalculatedGreen if Actual ≥ TargetAvg Response TimeNumber (ms)Average API response timeResponse TargetNumber (ms)Target response timeResponse StatusCalculatedGreen if Actual ≤ TargetError RatePercentError rate (e.g., 0.4)Error TargetPercentTarget error rate (e.g., 1.0)Error StatusCalculatedGreen if Actual ≤ Target
+
+KR3 - Operations / Wildcard (COMPLETE REDESIGN)
+Problem: Current fields (Uptime, Response Time) are too rigid. KR3 is meant to be a FLEXIBLE "wildcard" section for team-specific priorities.
+New Structure: Let users choose their KR3 focus area, then show relevant fields.
+Add a Dropdown at the top:
+"KR3 Focus Area":
+
+Customer Onboarding
+Customer Support
+Content & Marketing
+Custom (free-form)
+
+If "Customer Onboarding" selected:
+FieldTypeDescriptionCustomers OnboardedNumberCustomers who completed onboardingOnboarding TargetNumberTarget numberCompletion RatePercentOnboarding completion rateAvg Time to ValueNumber (days)Average days to first valueTime to Value TargetNumber (days)Target days
+If "Customer Support" selected:
+FieldTypeDescriptionSupport TicketsNumberTotal tickets this periodAvg Resolution TimeNumber (hrs)Average resolution timeResolution TargetNumber (hrs)Target resolution timeEscalationsNumberNumber of escalationsCSAT ScoreNumber (1-5)Customer satisfaction (optional)
+If "Content & Marketing" selected:
+FieldTypeDescriptionBlog PostsNumberPublished blog postsCase StudiesNumberPublished case studiesWebinarsNumberWebinars hostedTotal ViewsNumberContent views/engagementConversion RatePercentContent conversion rate
+If "Custom" selected:
+FieldTypeDescriptionMetric 1 NameTextCustom metric nameMetric 1 ValueTextCustom metric valueMetric 2 NameTextCustom metric name (optional)Metric 2 ValueTextCustom metric value (optional)Metric 3 NameTextCustom metric name (optional)Metric 3 ValueTextCustom metric value (optional)NotesText AreaAdditional context
+
+Database Schema Updates
+Update the submission storage to accommodate the new flexible structure:
+typescript// KR1 submission
+{
+  productId: 'stigviewer',
+  period: '2026-01-26',
+  type: 'weekly',
+  kr1: {
+    tof: { actual: 1250, target: 1500 },  // percent calculated: 83%
+    mof: { actual: 125, target: 150 },
+    bof: { actual: 12, target: 20 },
+    revenue: { actual: 45000, target: 50000 }
+  }
+}
+
+// KR2 submission (pre-launch)
+{
+  kr2: {
+    status: 'pre-launch',
+    sprint: { name: 'Sprint 3', completed: 23, total: 30 },
+    blockers: { count: 3, critical: 2, details: 'DNS config pending...' }
+  }
+}
+
+// KR2 submission (post-launch)
+{
+  kr2: {
+    status: 'post-launch',
+    uptime: { actual: 99.8, target: 99.5 },
+    responseTime: { actual: 240, target: 300 },
+    errorRate: { actual: 0.4, target: 1.0 }
+  }
+}
+
+// KR3 submission
+{
+  kr3: {
+    focusArea: 'support',  // or 'onboarding', 'content', 'custom'
+    data: {
+      tickets: 8,
+      avgResolutionTime: 6,
+      resolutionTarget: 8,
+      escalations: 0
+    }
+  }
+}
+
+UI/UX Requirements
+
+Auto-calculation: All percent fields should calculate automatically and update in real-time
+Color coding:
+
+Green: Meeting or exceeding target
+Yellow: 80-99% of target
+Red: Below 80% of target
+
+
+Conditional fields: KR2 and KR3 should show/hide fields based on dropdown selection
+Smooth transitions: Animate field changes when dropdown selection changes
+Validation: Ensure targets > 0 before calculating percentages (avoid division by zero)
+Persistence: Remember the product's KR2 status (pre/post-launch) and KR3 focus area for future submissions
+
+
+Summary of Changes
+SectionChangeKR1Replace "Percent" inputs with "Target" inputs; auto-calculate percentKR2Add pre-launch/post-launch toggle; completely different fields for eachKR3Add focus area dropdown; different fields for onboarding/support/content/custom
+Please implement these changes to make the forms actually useful for tracking real product metrics.
