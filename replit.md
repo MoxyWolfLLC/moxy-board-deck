@@ -69,7 +69,9 @@ Each product has fields across 4 categories:
 - `GET /api/admin/financials/:period` - Get financial record by period (admin)
 - `POST /api/admin/financials` - Create/update financial record (admin)
 
-## Theme Colors
+## Theme Colors (Light Mode)
 - Primary: #FF6B35 (MoxyWolf Orange)
-- Background: Dark navy (#1a1a2e / #16213e)
-- Card: Lighter navy with transparency
+- Background: White (#FFFFFF)
+- Card: White with subtle gray border/shadow
+- Text: Dark gray for primary, medium gray for secondary
+- Accent: MoxyWolf Orange preserved for buttons and highlights
