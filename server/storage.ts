@@ -81,7 +81,7 @@ export class ReplitDBStorage implements IStorage {
       await this.db.set(`user_email:${adminUser.email.toLowerCase()}`, adminId);
     }
 
-    // Check if Dorian user exists
+    // Check if Dorian user exists - ensure role is admin
     const dorianExists = await this.getUserByEmail("dorianc@moxywolf.com");
     if (!dorianExists) {
       const dorianId = randomUUID();
@@ -96,6 +96,9 @@ export class ReplitDBStorage implements IStorage {
       };
       await this.db.set(`user:${dorianId}`, dorianUser);
       await this.db.set(`user_email:${dorianUser.email.toLowerCase()}`, dorianId);
+    } else if (dorianExists.role !== "admin") {
+      // Fix: Ensure Dorian is always admin
+      await this.updateUser(dorianExists.id, { role: "admin" });
     }
 
     this.initialized = true;

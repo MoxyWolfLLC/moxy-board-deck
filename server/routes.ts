@@ -35,7 +35,7 @@ export async function registerRoutes(
       cookie: {
         maxAge: 86400000 * 7, // 7 days
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false,
         sameSite: 'lax',
         path: '/'
       },

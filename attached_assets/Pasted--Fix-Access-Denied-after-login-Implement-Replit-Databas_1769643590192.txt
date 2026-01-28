@@ -1,0 +1,86 @@
+## Fix: Access Denied after login + Implement Replit Database properly
+
+### Issue 1: Dorian seeded as "operator" instead of "admin"
+
+In server/storage.ts, Dorian is being seeded with role: "operator". Change this to "admin":
+
+Find:
+role: "operator",
+
+Change to:
+role: "admin",
+
+### Issue 2: Replit Database not actually implemented
+
+The storage.ts file is still using in-memory Maps (MemStorage class). This needs to be replaced with actual Replit Database.
+
+Please implement proper Replit Database storage:
+```typescript
+import Database from '@replit/database';
+
+const db = new Database();
+
+export class ReplitStorage implements IStorage {
+  
+  async init() {
+    // Check if Dorian exists, if not seed him
+    const existingUser = await this.getUserByEmail("dorianc@moxywolf.com");
+    if (!existingUser) {
+      await this.createUser({
+        email: "dorianc@moxywolf.com",
+        password: "TGV0bWVpbjIzNCQ=",
+        name: "Dorian Cougias",
+        role: "admin",  // MUST be admin
+        products: ["stigviewer", "deepfeedback", "reggenome"],
+      });
+    }
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    return await db.get(`user:${id}`);
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const userIds = await db.list("user:");
+    for (const key of userIds) {
+      const user = await db.get(key);
+      if (user && user.email === email) return user;
+    }
+    return undefined;
+  }
+
+  async createUser(data: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const user = { id, ...data, createdAt: new Date().toISOString() };
+    await db.set(`user:${id}`, user);
+    return user;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const user = await this.getUser(id);
+    if (!user) return undefined;
+    const updated = { ...user, ...updates };
+    await db.set(`user:${id}`, updated);
+    return updated;
+  }
+
+  // ... implement other methods similarly
+}
+```
+
+### Issue 3: Cookie configuration
+
+Make sure the session cookie config in server/routes.ts has:
+```typescript
+cookie: {
+  maxAge: 86400000 * 7,
+  httpOnly: true,
+  secure: false,  // Set to false for development on Replit
+  sameSite: 'lax',
+  path: '/'
+}
+```
+
+Note: Set `secure: false` for Replit development environment since it may not be using HTTPS internally.
+
+Please implement all three fixes so the app works correctly with persistent storage.
