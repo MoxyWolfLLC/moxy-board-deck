@@ -8,8 +8,10 @@ MVP implementation with:
 - User authentication (login/register)
 - Role-based access (admin/operator)
 - Product-based KPI submission forms
-- Admin panel for user management
+- Admin panel for user management with product assignment
 - Deck generation system
+- LivePlan financial data entry with 8 metrics (Revenue, Expenses, Operating Income/Margin, Net Profit, Cash Balance, AR, Days to Get Paid)
+- Product filtering: Operators only see assigned products, admins see all products
 
 ## Architecture
 
@@ -24,9 +26,10 @@ MVP implementation with:
 - **API**: RESTful endpoints under /api
 
 ### Data Models
-- **Users**: id, email, password, name, role, products, createdAt
+- **Users**: id, email, password, name, role, products (assigned product IDs), createdAt
 - **Submissions**: id, productId, fieldName, value, userEmail, periodType, periodStart, updatedAt
 - **DeckGeneration**: id, generatedBy, periodType, periodStart, slidesUrl, status, createdAt
+- **FinancialRecord**: id, periodStart, periodEnd, revenue, expenses, operatingIncome, operatingMargin, netProfit, cashBalance, accountsReceivable, daysToGetPaid, updatedAt, updatedBy
 
 ### Products
 5 default products with KPI fields:
@@ -62,6 +65,9 @@ Each product has fields across 4 categories:
 - `DELETE /api/admin/users/:id` - Delete user (admin)
 - `GET /api/admin/generations` - Get deck generations (admin)
 - `POST /api/admin/generate-deck` - Generate deck (admin)
+- `GET /api/admin/financials` - Get all financial records (admin)
+- `GET /api/admin/financials/:period` - Get financial record by period (admin)
+- `POST /api/admin/financials` - Create/update financial record (admin)
 
 ## Theme Colors
 - Primary: #FF6B35 (MoxyWolf Orange)
