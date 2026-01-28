@@ -525,6 +525,8 @@ function EditUserDialog({ user, open, onOpenChange }: { user: User; open: boolea
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      // Also invalidate current user data so dashboard shows updated products
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({
         title: "User updated",
         description: "The user has been updated successfully.",
