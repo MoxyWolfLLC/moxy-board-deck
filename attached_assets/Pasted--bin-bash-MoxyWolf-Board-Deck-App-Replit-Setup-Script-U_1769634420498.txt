@@ -1,0 +1,1500 @@
+#!/bin/bash
+# MoxyWolf Board Deck App - Replit Setup Script
+# Uses Replit Database + Simple Email/Password Auth
+# Run: chmod +x moxywolf-replit-setup.sh && ./moxywolf-replit-setup.sh
+
+echo "🐺 Setting up MoxyWolf Board Deck App for Replit..."
+
+# Create directory structure
+mkdir -p src/app/auth/login
+mkdir -p src/app/auth/register
+mkdir -p src/app/auth/logout
+mkdir -p src/app/dashboard
+mkdir -p src/app/admin
+mkdir -p src/app/api/auth
+mkdir -p src/app/api/submissions
+mkdir -p src/app/api/generate-deck
+mkdir -p src/components
+mkdir -p src/lib
+mkdir -p src/types
+
+# ============================================
+# package.json - Using Replit Database
+# ============================================
+cat > package.json << 'PKGJSON'
+{
+  "name": "moxywolf-board-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 3000 -H 0.0.0.0",
+    "lint": "next lint",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "@replit/database": "^2.0.5",
+    "bcryptjs": "^2.4.3",
+    "googleapis": "^129.0.0",
+    "iron-session": "^8.0.1",
+    "next": "14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.55.0",
+    "eslint-config-next": "14.0.4",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.0"
+  }
+}
+PKGJSON
+
+# ============================================
+# .replit
+# ============================================
+cat > .replit << 'REPLIT'
+run = "npm run dev"
+entrypoint = "src/app/page.tsx"
+
+[nix]
+channel = "stable-24_05"
+
+[env]
+PATH = "/home/runner/$REPL_SLUG/.config/npm/node_global/bin:/home/runner/$REPL_SLUG/node_modules/.bin:./node_modules/.bin"
+
+[deployment]
+run = ["sh", "-c", "npm run build && npm run start"]
+deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+REPLIT
+
+# ============================================
+# replit.nix
+# ============================================
+cat > replit.nix << 'REPLITNIX'
+{ pkgs }: {
+  deps = [
+    pkgs.nodejs_20
+    pkgs.nodePackages.typescript-language-server
+  ];
+}
+REPLITNIX
+
+# ============================================
+# next.config.js
+# ============================================
+cat > next.config.js << 'NEXTCONFIG'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'standalone',
+  images: { unoptimized: true },
+  experimental: { serverActions: true },
+}
+module.exports = nextConfig
+NEXTCONFIG
+
+# ============================================
+# tsconfig.json
+# ============================================
+cat > tsconfig.json << 'TSCONFIG'
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+TSCONFIG
+
+# ============================================
+# tailwind.config.ts
+# ============================================
+cat > tailwind.config.ts << 'TAILWIND'
+import type { Config } from 'tailwindcss'
+const config: Config = {
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  theme: {
+    extend: {
+      colors: {
+        moxy: {
+          orange: '#FF6B35',
+          'orange-dark': '#E55A2B',
+          dark: '#1a1a2e',
+          'dark-light': '#16213e',
+        }
+      },
+    },
+  },
+  plugins: [],
+}
+export default config
+TAILWIND
+
+# ============================================
+# postcss.config.js
+# ============================================
+cat > postcss.config.js << 'POSTCSS'
+module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }
+POSTCSS
+
+# ============================================
+# next-env.d.ts
+# ============================================
+cat > next-env.d.ts << 'NEXTENV'
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+NEXTENV
+
+# ============================================
+# src/lib/db.ts - Replit Database wrapper
+# ============================================
+cat > src/lib/db.ts << 'DBLIB'
+import Database from '@replit/database'
+
+const db = new Database()
+
+// User operations
+export interface User {
+  email: string
+  password: string
+  name: string
+  role: 'admin' | 'operator'
+  products: string[]
+  createdAt: string
+}
+
+export async function getUser(email: string): Promise<User | null> {
+  const user = await db.get(`user:${email.toLowerCase()}`)
+  return user as User | null
+}
+
+export async function createUser(user: User): Promise<void> {
+  await db.set(`user:${user.email.toLowerCase()}`, user)
+}
+
+export async function updateUser(email: string, updates: Partial<User>): Promise<void> {
+  const user = await getUser(email)
+  if (user) {
+    await db.set(`user:${email.toLowerCase()}`, { ...user, ...updates })
+  }
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  const keys = await db.list('user:')
+  const users: User[] = []
+  for (const key of keys) {
+    const user = await db.get(key)
+    if (user) users.push(user as User)
+  }
+  return users
+}
+
+// Submission operations
+export interface Submission {
+  productId: string
+  fieldName: string
+  value: string
+  userEmail: string
+  periodType: 'weekly' | 'monthly'
+  periodStart: string
+  updatedAt: string
+}
+
+export async function getSubmission(productId: string, fieldName: string, periodStart: string): Promise<Submission | null> {
+  const sub = await db.get(`sub:${productId}:${fieldName}:${periodStart}`)
+  return sub as Submission | null
+}
+
+export async function setSubmission(sub: Submission): Promise<void> {
+  await db.set(`sub:${sub.productId}:${sub.fieldName}:${sub.periodStart}`, sub)
+}
+
+export async function getSubmissionsForProduct(productId: string, periodType: string, periodStart: string): Promise<Submission[]> {
+  const prefix = `sub:${productId}:`
+  const keys = await db.list(prefix)
+  const subs: Submission[] = []
+  for (const key of keys) {
+    const sub = await db.get(key) as Submission
+    if (sub && sub.periodType === periodType && sub.periodStart === periodStart) {
+      subs.push(sub)
+    }
+  }
+  return subs
+}
+
+export async function getAllSubmissions(periodType: string, periodStart: string): Promise<Submission[]> {
+  const keys = await db.list('sub:')
+  const subs: Submission[] = []
+  for (const key of keys) {
+    const sub = await db.get(key) as Submission
+    if (sub && sub.periodType === periodType && sub.periodStart === periodStart) {
+      subs.push(sub)
+    }
+  }
+  return subs
+}
+
+// Deck generation operations
+export interface DeckGeneration {
+  id: string
+  generatedBy: string
+  periodType: 'weekly' | 'monthly'
+  periodStart: string
+  slidesUrl: string | null
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  createdAt: string
+}
+
+export async function createDeckGeneration(gen: DeckGeneration): Promise<void> {
+  await db.set(`gen:${gen.id}`, gen)
+}
+
+export async function updateDeckGeneration(id: string, updates: Partial<DeckGeneration>): Promise<void> {
+  const gen = await db.get(`gen:${id}`) as DeckGeneration
+  if (gen) {
+    await db.set(`gen:${id}`, { ...gen, ...updates })
+  }
+}
+
+export async function getRecentGenerations(limit: number = 10): Promise<DeckGeneration[]> {
+  const keys = await db.list('gen:')
+  const gens: DeckGeneration[] = []
+  for (const key of keys) {
+    const gen = await db.get(key) as DeckGeneration
+    if (gen) gens.push(gen)
+  }
+  return gens.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, limit)
+}
+
+export { db }
+DBLIB
+
+# ============================================
+# src/lib/session.ts - Iron Session config
+# ============================================
+cat > src/lib/session.ts << 'SESSIONLIB'
+import { SessionOptions } from 'iron-session'
+
+export interface SessionData {
+  email?: string
+  isLoggedIn: boolean
+}
+
+export const sessionOptions: SessionOptions = {
+  password: process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long_for_security',
+  cookieName: 'moxywolf-session',
+  cookieOptions: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7, // 1 week
+  },
+}
+
+export const defaultSession: SessionData = {
+  isLoggedIn: false,
+}
+SESSIONLIB
+
+# ============================================
+# src/lib/auth.ts - Auth helpers
+# ============================================
+cat > src/lib/auth.ts << 'AUTHLIB'
+import { cookies } from 'next/headers'
+import { getIronSession } from 'iron-session'
+import { sessionOptions, SessionData, defaultSession } from './session'
+import { getUser, type User } from './db'
+
+export async function getSession() {
+  const session = await getIronSession<SessionData>(cookies(), sessionOptions)
+  if (!session.isLoggedIn) {
+    session.isLoggedIn = defaultSession.isLoggedIn
+  }
+  return session
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  const session = await getSession()
+  if (!session.isLoggedIn || !session.email) return null
+  return getUser(session.email)
+}
+
+export async function isAdmin(): Promise<boolean> {
+  const user = await getCurrentUser()
+  return user?.role === 'admin'
+}
+AUTHLIB
+
+# ============================================
+# src/lib/products.ts - Product definitions
+# ============================================
+cat > src/lib/products.ts << 'PRODUCTSLIB'
+export interface FieldDefinition {
+  name: string
+  placeholder: string
+  type: 'text' | 'number' | 'percentage' | 'currency' | 'select'
+  description: string
+  example: string
+  frequency: 'weekly' | 'monthly'
+  category: 'kr1' | 'kr2' | 'kr3' | 'northstar'
+}
+
+export interface Product {
+  id: string
+  name: string
+  slideNumber: number
+  fields: FieldDefinition[]
+}
+
+function generateFields(prefix: string): FieldDefinition[] {
+  return [
+    // KR1 - Sales & Marketing
+    { name: 'TOF Actual', placeholder: `${prefix}_TOF_Actual`, type: 'number', description: 'Top of Funnel visitors', example: '1250', frequency: 'weekly', category: 'kr1' },
+    { name: 'TOF Target', placeholder: `${prefix}_TOF_Target`, type: 'number', description: 'TOF target', example: '1500', frequency: 'monthly', category: 'kr1' },
+    { name: 'TOF Percent', placeholder: `${prefix}_TOF_Percent`, type: 'percentage', description: 'TOF % of target', example: '83', frequency: 'weekly', category: 'kr1' },
+    { name: 'MOF Actual', placeholder: `${prefix}_MOF_Actual`, type: 'number', description: 'Middle of Funnel leads', example: '125', frequency: 'weekly', category: 'kr1' },
+    { name: 'MOF Target', placeholder: `${prefix}_MOF_Target`, type: 'number', description: 'MOF target', example: '150', frequency: 'monthly', category: 'kr1' },
+    { name: 'MOF Percent', placeholder: `${prefix}_MOF_Percent`, type: 'percentage', description: 'MOF % of target', example: '83', frequency: 'weekly', category: 'kr1' },
+    { name: 'BOF Actual', placeholder: `${prefix}_BOF_Actual`, type: 'number', description: 'Bottom of Funnel conversions', example: '12', frequency: 'weekly', category: 'kr1' },
+    { name: 'BOF Target', placeholder: `${prefix}_BOF_Target`, type: 'number', description: 'BOF target', example: '15', frequency: 'monthly', category: 'kr1' },
+    { name: 'BOF Percent', placeholder: `${prefix}_BOF_Percent`, type: 'percentage', description: 'BOF % of target', example: '80', frequency: 'weekly', category: 'kr1' },
+    { name: 'Revenue Actual', placeholder: `${prefix}_Revenue_Actual`, type: 'currency', description: 'Actual revenue', example: '45000', frequency: 'weekly', category: 'kr1' },
+    { name: 'Revenue Target', placeholder: `${prefix}_Revenue_Target`, type: 'currency', description: 'Revenue target', example: '50000', frequency: 'monthly', category: 'kr1' },
+    { name: 'Revenue Percent', placeholder: `${prefix}_Revenue_Percent`, type: 'percentage', description: 'Revenue % of target', example: '90', frequency: 'weekly', category: 'kr1' },
+    // KR2 - Development
+    { name: 'Sprint Velocity', placeholder: `${prefix}_Sprint_Actual`, type: 'number', description: 'Sprint velocity', example: '42', frequency: 'weekly', category: 'kr2' },
+    { name: 'Sprint Target', placeholder: `${prefix}_Sprint_Target`, type: 'number', description: 'Sprint target', example: '50', frequency: 'monthly', category: 'kr2' },
+    { name: 'Sprint Percent', placeholder: `${prefix}_Sprint_Percent`, type: 'percentage', description: 'Sprint % of target', example: '84', frequency: 'weekly', category: 'kr2' },
+    { name: 'Bug Count', placeholder: `${prefix}_Bug_Actual`, type: 'number', description: 'Open bugs', example: '8', frequency: 'weekly', category: 'kr2' },
+    { name: 'Bug Target', placeholder: `${prefix}_Bug_Target`, type: 'number', description: 'Bug target (max)', example: '5', frequency: 'monthly', category: 'kr2' },
+    { name: 'Bug Percent', placeholder: `${prefix}_Bug_Percent`, type: 'percentage', description: 'Bug % of target', example: '160', frequency: 'weekly', category: 'kr2' },
+    // KR3 - Operations
+    { name: 'Uptime Actual', placeholder: `${prefix}_Uptime_Actual`, type: 'percentage', description: 'System uptime', example: '99.8', frequency: 'weekly', category: 'kr3' },
+    { name: 'Uptime Target', placeholder: `${prefix}_Uptime_Target`, type: 'percentage', description: 'Uptime target', example: '99.9', frequency: 'monthly', category: 'kr3' },
+    { name: 'Response Time', placeholder: `${prefix}_Response_Actual`, type: 'number', description: 'Avg response (ms)', example: '125', frequency: 'weekly', category: 'kr3' },
+    { name: 'Response Target', placeholder: `${prefix}_Response_Target`, type: 'number', description: 'Response target', example: '100', frequency: 'monthly', category: 'kr3' },
+    // North Star Metrics
+    { name: 'Trend', placeholder: `${prefix}_TREND`, type: 'select', description: 'Product trend', example: '↑', frequency: 'weekly', category: 'northstar' },
+    { name: 'Days to Revenue', placeholder: `${prefix}_DAYS_TO_REV`, type: 'number', description: 'Days to revenue', example: '45', frequency: 'weekly', category: 'northstar' },
+    { name: 'Days to Rev Target', placeholder: `${prefix}_DAYS_TO_REV_TGT`, type: 'number', description: 'Target days', example: '30', frequency: 'monthly', category: 'northstar' },
+    { name: 'Revenue Quality', placeholder: `${prefix}_REV_QUALITY_INDEX`, type: 'number', description: 'Quality index (1-10)', example: '7.5', frequency: 'weekly', category: 'northstar' },
+    { name: 'Customer Conc %', placeholder: `${prefix}_CUSTOMER_CONC_PCT`, type: 'percentage', description: 'Top 3 customer %', example: '60', frequency: 'monthly', category: 'northstar' },
+    { name: 'Churn Rate', placeholder: `${prefix}_CHURN`, type: 'percentage', description: 'Monthly churn', example: '2.5', frequency: 'monthly', category: 'northstar' },
+    { name: 'GAAP Revenue', placeholder: `${prefix}_GAAP`, type: 'currency', description: 'GAAP revenue', example: '125000', frequency: 'monthly', category: 'northstar' },
+    { name: 'Product Score', placeholder: `${prefix}_PROD_SCORE`, type: 'number', description: 'Score (1-100)', example: '78', frequency: 'weekly', category: 'northstar' },
+  ]
+}
+
+export const products: Product[] = [
+  { id: 'stigviewer', name: 'STIGViewer', slideNumber: 5, fields: generateFields('STIGViewer') },
+  { id: 'deepfeedback', name: 'DeepFeedback', slideNumber: 6, fields: generateFields('DeepFeedback') },
+  { id: 'prmvp', name: 'PRMVP', slideNumber: 7, fields: generateFields('PRMVP') },
+  { id: 'sams', name: 'SAMS', slideNumber: 8, fields: generateFields('SAMS') },
+  { id: 'reggenome', name: 'RegGenome', slideNumber: 9, fields: generateFields('RegGenome') },
+]
+
+export function getProduct(id: string): Product | undefined {
+  return products.find(p => p.id === id)
+}
+
+export function getFieldsByCategory(product: Product, category: string) {
+  return product.fields.filter(f => f.category === category)
+}
+
+export function getFieldsByFrequency(product: Product, frequency: string) {
+  return product.fields.filter(f => f.frequency === frequency)
+}
+PRODUCTSLIB
+
+# ============================================
+# src/app/globals.css
+# ============================================
+cat > src/app/globals.css << 'GLOBALCSS'
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  min-height: 100vh;
+}
+
+@layer components {
+  .btn-primary { @apply bg-[#FF6B35] hover:bg-[#E55A2B] text-white font-semibold py-2 px-4 rounded-lg transition-colors; }
+  .btn-secondary { @apply bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors; }
+  .card { @apply bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-6; }
+  .input-field { @apply w-full px-4 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#FF6B35] focus:ring-1 focus:ring-[#FF6B35]; }
+  .label { @apply block text-sm font-medium text-gray-300 mb-1; }
+}
+
+.fade-in { animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+GLOBALCSS
+
+# ============================================
+# src/app/layout.tsx
+# ============================================
+cat > src/app/layout.tsx << 'LAYOUT'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'MoxyWolf Board Deck',
+  description: 'Board meeting data collection portal',
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}
+LAYOUT
+
+# ============================================
+# src/app/page.tsx - Landing/Login redirect
+# ============================================
+cat > src/app/page.tsx << 'HOMEPAGE'
+import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth'
+
+export default async function Home() {
+  const user = await getCurrentUser()
+
+  if (user) {
+    redirect(user.role === 'admin' ? '/admin' : '/dashboard')
+  }
+
+  redirect('/auth/login')
+}
+HOMEPAGE
+
+# ============================================
+# src/app/auth/login/page.tsx
+# ============================================
+cat > src/app/auth/login/page.tsx << 'LOGINPAGE'
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+
+    const data = await res.json()
+
+    if (res.ok) {
+      router.push(data.redirect || '/dashboard')
+      router.refresh()
+    } else {
+      setError(data.error || 'Login failed')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#FF6B35] rounded-2xl mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">MoxyWolf Board Deck</h1>
+          <p className="text-gray-400">Sign in to continue</p>
+        </div>
+
+        <div className="card">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="label">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" placeholder="you@moxywolf.com" required />
+            </div>
+            <div>
+              <label className="label">Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="input-field" placeholder="••••••••" required />
+            </div>
+
+            {error && <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>}
+
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+
+          <div className="mt-4 text-center text-sm text-gray-400">
+            Don't have an account? <Link href="/auth/register" className="text-[#FF6B35] hover:underline">Register</Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+LOGINPAGE
+
+# ============================================
+# src/app/auth/register/page.tsx
+# ============================================
+cat > src/app/auth/register/page.tsx << 'REGISTERPAGE'
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+export default function RegisterPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name }),
+    })
+
+    const data = await res.json()
+
+    if (res.ok) {
+      router.push('/auth/login?registered=true')
+    } else {
+      setError(data.error || 'Registration failed')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#FF6B35] rounded-2xl mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
+          <p className="text-gray-400">Join the MoxyWolf team</p>
+        </div>
+
+        <div className="card">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="label">Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder="Your name" required />
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" placeholder="you@moxywolf.com" required />
+            </div>
+            <div>
+              <label className="label">Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="input-field" placeholder="Min 6 characters" required minLength={6} />
+            </div>
+
+            {error && <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>}
+
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? 'Creating account...' : 'Create Account'}
+            </button>
+          </form>
+
+          <div className="mt-4 text-center text-sm text-gray-400">
+            Already have an account? <Link href="/auth/login" className="text-[#FF6B35] hover:underline">Sign in</Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+REGISTERPAGE
+
+# ============================================
+# src/app/api/auth/login/route.ts
+# ============================================
+cat > src/app/api/auth/login/route.ts << 'LOGINAPI'
+import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { cookies } from 'next/headers'
+import { getIronSession } from 'iron-session'
+import { getUser } from '@/lib/db'
+import { sessionOptions, SessionData } from '@/lib/session'
+
+export async function POST(request: Request) {
+  try {
+    const { email, password } = await request.json()
+
+    const user = await getUser(email)
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    }
+
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    }
+
+    const session = await getIronSession<SessionData>(cookies(), sessionOptions)
+    session.email = user.email
+    session.isLoggedIn = true
+    await session.save()
+
+    return NextResponse.json({
+      success: true,
+      redirect: user.role === 'admin' ? '/admin' : '/dashboard'
+    })
+  } catch (error) {
+    return NextResponse.json({ error: 'Login failed' }, { status: 500 })
+  }
+}
+LOGINAPI
+
+# ============================================
+# src/app/api/auth/register/route.ts
+# ============================================
+cat > src/app/api/auth/register/route.ts << 'REGISTERAPI'
+import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { getUser, createUser } from '@/lib/db'
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'dorianc@moxywolf.com'
+
+export async function POST(request: Request) {
+  try {
+    const { email, password, name } = await request.json()
+
+    if (!email || !password || password.length < 6) {
+      return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    }
+
+    const existing = await getUser(email)
+    if (existing) {
+      return NextResponse.json({ error: 'Email already registered' }, { status: 400 })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const isAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+
+    await createUser({
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      name,
+      role: isAdmin ? 'admin' : 'operator',
+      products: [],
+      createdAt: new Date().toISOString(),
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json({ error: 'Registration failed' }, { status: 500 })
+  }
+}
+REGISTERAPI
+
+# ============================================
+# src/app/api/auth/logout/route.ts
+# ============================================
+cat > src/app/api/auth/logout/route.ts << 'LOGOUTAPI'
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { getIronSession } from 'iron-session'
+import { sessionOptions, SessionData } from '@/lib/session'
+
+export async function POST() {
+  const session = await getIronSession<SessionData>(cookies(), sessionOptions)
+  session.destroy()
+  return NextResponse.json({ success: true })
+}
+LOGOUTAPI
+
+# ============================================
+# src/app/api/auth/me/route.ts
+# ============================================
+cat > src/app/api/auth/me/route.ts << 'MEAPI'
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+
+export async function GET() {
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+  return NextResponse.json({
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    products: user.products,
+  })
+}
+MEAPI
+
+# ============================================
+# src/app/api/user/products/route.ts
+# ============================================
+mkdir -p src/app/api/user/products
+cat > src/app/api/user/products/route.ts << 'USERPRODUCTSAPI'
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+import { updateUser } from '@/lib/db'
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const { products } = await request.json()
+  await updateUser(user.email, { products })
+
+  return NextResponse.json({ success: true })
+}
+USERPRODUCTSAPI
+
+# ============================================
+# src/app/api/submissions/route.ts
+# ============================================
+cat > src/app/api/submissions/route.ts << 'SUBMISSIONSAPI'
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+import { setSubmission, getSubmissionsForProduct } from '@/lib/db'
+
+export async function GET(request: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const { searchParams } = new URL(request.url)
+  const productId = searchParams.get('productId')
+  const periodType = searchParams.get('periodType') || 'weekly'
+  const periodStart = searchParams.get('periodStart')
+
+  if (!productId || !periodStart) {
+    return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+  }
+
+  const subs = await getSubmissionsForProduct(productId, periodType, periodStart)
+  return NextResponse.json({ submissions: subs })
+}
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const { productId, fieldName, value, periodType, periodStart } = await request.json()
+
+  await setSubmission({
+    productId,
+    fieldName,
+    value,
+    userEmail: user.email,
+    periodType,
+    periodStart,
+    updatedAt: new Date().toISOString(),
+  })
+
+  return NextResponse.json({ success: true })
+}
+SUBMISSIONSAPI
+
+# ============================================
+# src/app/api/admin/stats/route.ts
+# ============================================
+mkdir -p src/app/api/admin/stats
+cat > src/app/api/admin/stats/route.ts << 'ADMINSTATSAPI'
+import { NextResponse } from 'next/server'
+import { getCurrentUser, isAdmin } from '@/lib/auth'
+import { getAllSubmissions, getAllUsers, getRecentGenerations } from '@/lib/db'
+import { products } from '@/lib/products'
+
+export async function GET(request: Request) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const periodType = searchParams.get('periodType') || 'weekly'
+  const periodStart = searchParams.get('periodStart') || ''
+
+  const allSubs = await getAllSubmissions(periodType, periodStart)
+  const allUsers = await getAllUsers()
+  const generations = await getRecentGenerations()
+
+  const stats = products.map(product => {
+    const productSubs = allSubs.filter(s => s.productId === product.id)
+    const weeklyFields = product.fields.filter(f => f.frequency === 'weekly').length
+    const monthlyFields = product.fields.filter(f => f.frequency === 'monthly').length
+    const totalFields = periodType === 'weekly' ? weeklyFields : monthlyFields
+
+    const operators = allUsers.filter(u => u.products.includes(product.id))
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      slideNumber: product.slideNumber,
+      filledFields: productSubs.length,
+      totalFields,
+      operators: operators.map(o => ({ email: o.email, name: o.name })),
+    }
+  })
+
+  return NextResponse.json({ stats, generations })
+}
+ADMINSTATSAPI
+
+# ============================================
+# src/app/api/generate-deck/route.ts
+# ============================================
+cat > src/app/api/generate-deck/route.ts << 'GENERATEAPI'
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+import { getAllSubmissions, createDeckGeneration, updateDeckGeneration } from '@/lib/db'
+import { google } from 'googleapis'
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  const { periodType, periodStart } = await request.json()
+  const genId = `gen_${Date.now()}`
+
+  await createDeckGeneration({
+    id: genId,
+    generatedBy: user.email,
+    periodType,
+    periodStart,
+    slidesUrl: null,
+    status: 'in_progress',
+    createdAt: new Date().toISOString(),
+  })
+
+  try {
+    const submissions = await getAllSubmissions(periodType, periodStart)
+    const replacements: Record<string, string> = {}
+    submissions.forEach(sub => { replacements[sub.fieldName] = sub.value })
+
+    const templateId = process.env.GOOGLE_SLIDES_TEMPLATE_ID
+    if (!templateId) throw new Error('No template ID')
+
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    )
+    auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
+
+    const drive = google.drive({ version: 'v3', auth })
+    const slides = google.slides({ version: 'v1', auth })
+
+    const copy = await drive.files.copy({
+      fileId: templateId,
+      requestBody: { name: `MoxyWolf Board Deck - ${periodType} - ${periodStart}` },
+    })
+
+    const newId = copy.data.id!
+    const requests = Object.entries(replacements).map(([placeholder, value]) => ({
+      replaceAllText: {
+        containsText: { text: `<${placeholder}>`, matchCase: true },
+        replaceText: value,
+      },
+    }))
+
+    if (requests.length > 0) {
+      await slides.presentations.batchUpdate({
+        presentationId: newId,
+        requestBody: { requests },
+      })
+    }
+
+    const slidesUrl = `https://docs.google.com/presentation/d/${newId}/edit`
+    await updateDeckGeneration(genId, { status: 'completed', slidesUrl })
+
+    return NextResponse.json({ success: true, url: slidesUrl })
+  } catch (error: any) {
+    await updateDeckGeneration(genId, { status: 'failed' })
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+GENERATEAPI
+
+echo "📄 Creating dashboard pages..."
+
+# ============================================
+# src/app/dashboard/page.tsx
+# ============================================
+cat > src/app/dashboard/page.tsx << 'DASHBOARDPAGE'
+import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth'
+import DashboardClient from './DashboardClient'
+
+export default async function DashboardPage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/auth/login')
+  if (user.role === 'admin') redirect('/admin')
+
+  return <DashboardClient user={{ email: user.email, name: user.name, products: user.products }} />
+}
+DASHBOARDPAGE
+
+# ============================================
+# src/app/dashboard/DashboardClient.tsx
+# ============================================
+cat > src/app/dashboard/DashboardClient.tsx << 'DASHBOARDCLIENT'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { products, getFieldsByCategory, type Product } from '@/lib/products'
+
+interface Props {
+  user: { email: string; name: string; products: string[] }
+}
+
+export default function DashboardClient({ user }: Props) {
+  const [selectedProducts, setSelectedProducts] = useState<string[]>(user.products)
+  const [currentProduct, setCurrentProduct] = useState<Product | null>(null)
+  const [formData, setFormData] = useState<Record<string, string>>({})
+  const [activeTab, setActiveTab] = useState<'weekly' | 'monthly'>('weekly')
+  const [activeCategory, setActiveCategory] = useState('kr1')
+  const [saving, setSaving] = useState(false)
+  const [showSelector, setShowSelector] = useState(user.products.length === 0)
+  const router = useRouter()
+
+  const getPeriodStart = (type: 'weekly' | 'monthly') => {
+    const now = new Date()
+    if (type === 'weekly') {
+      const day = now.getDay()
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+      return new Date(now.setDate(diff)).toISOString().split('T')[0]
+    }
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  }
+
+  useEffect(() => {
+    if (currentProduct) {
+      loadSubmissions()
+    }
+  }, [currentProduct, activeTab])
+
+  const loadSubmissions = async () => {
+    if (!currentProduct) return
+    const res = await fetch(`/api/submissions?productId=${currentProduct.id}&periodType=${activeTab}&periodStart=${getPeriodStart(activeTab)}`)
+    const data = await res.json()
+    const loaded: Record<string, string> = {}
+    data.submissions?.forEach((s: any) => { loaded[s.fieldName] = s.value })
+    setFormData(loaded)
+  }
+
+  const saveProducts = async (prods: string[]) => {
+    await fetch('/api/user/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products: prods }),
+    })
+    setSelectedProducts(prods)
+    setShowSelector(false)
+    if (prods.length > 0) {
+      setCurrentProduct(products.find(p => p.id === prods[0]) || null)
+    }
+  }
+
+  const saveField = async (fieldName: string, value: string) => {
+    if (!currentProduct) return
+    setSaving(true)
+    await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productId: currentProduct.id,
+        fieldName,
+        value,
+        periodType: activeTab,
+        periodStart: getPeriodStart(activeTab),
+      }),
+    })
+    setFormData(prev => ({ ...prev, [fieldName]: value }))
+    setSaving(false)
+  }
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/auth/login')
+    router.refresh()
+  }
+
+  if (showSelector) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full">
+          <h1 className="text-2xl font-bold text-white text-center mb-6">Select Your Products</h1>
+          <div className="space-y-3">
+            {products.map(p => (
+              <button key={p.id} onClick={() => {
+                const newSel = selectedProducts.includes(p.id)
+                  ? selectedProducts.filter(id => id !== p.id)
+                  : [...selectedProducts, p.id]
+                setSelectedProducts(newSel)
+              }} className={`w-full p-4 rounded-lg border-2 text-left transition ${selectedProducts.includes(p.id) ? 'border-[#FF6B35] bg-[#FF6B35]/10' : 'border-white/10 bg-white/5'}`}>
+                <span className="font-semibold text-white">{p.name}</span>
+                <span className="text-gray-400 ml-2">Slide {p.slideNumber}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => saveProducts(selectedProducts)} disabled={selectedProducts.length === 0} className="btn-primary w-full mt-6">
+            Continue
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const userProducts = products.filter(p => selectedProducts.includes(p.id))
+  const categories = [
+    { id: 'kr1', label: 'KR1 - Sales', icon: '📈' },
+    { id: 'kr2', label: 'KR2 - Dev', icon: '💻' },
+    { id: 'kr3', label: 'KR3 - Ops', icon: '⚙️' },
+    { id: 'northstar', label: 'North Star', icon: '⭐' },
+  ]
+
+  const currentFields = currentProduct
+    ? getFieldsByCategory(currentProduct, activeCategory).filter(f => f.frequency === activeTab)
+    : []
+
+  return (
+    <div className="min-h-screen flex">
+      {/* Sidebar */}
+      <aside className="w-64 bg-[#16213e] border-r border-white/10 p-4 flex flex-col">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-[#FF6B35] rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold">M</span>
+          </div>
+          <div>
+            <h1 className="font-bold text-white">MoxyWolf</h1>
+            <p className="text-xs text-gray-400">Board Deck</p>
+          </div>
+        </div>
+
+        <nav className="flex-1">
+          <p className="text-xs text-gray-500 uppercase mb-2">Your Products</p>
+          {userProducts.map(p => (
+            <button key={p.id} onClick={() => setCurrentProduct(p)} className={`w-full text-left p-2 rounded-lg mb-1 ${currentProduct?.id === p.id ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'text-gray-300 hover:bg-white/5'}`}>
+              {p.name}
+            </button>
+          ))}
+          <button onClick={() => setShowSelector(true)} className="w-full text-left p-2 text-gray-400 hover:text-white text-sm mt-2">
+            + Manage products
+          </button>
+        </nav>
+
+        <div className="border-t border-white/10 pt-4">
+          <p className="text-sm text-white truncate">{user.name || user.email}</p>
+          <button onClick={logout} className="text-sm text-gray-400 hover:text-white">Sign out</button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 p-8">
+        {currentProduct ? (
+          <div className="fade-in">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-white">{currentProduct.name}</h1>
+                <p className="text-gray-400">Slide {currentProduct.slideNumber}</p>
+              </div>
+              {saving && <span className="text-sm text-[#FF6B35]">Saving...</span>}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setActiveTab('weekly')} className={`px-4 py-2 rounded-lg ${activeTab === 'weekly' ? 'bg-[#FF6B35] text-white' : 'bg-white/5 text-gray-400'}`}>Weekly</button>
+              <button onClick={() => setActiveTab('monthly')} className={`px-4 py-2 rounded-lg ${activeTab === 'monthly' ? 'bg-[#FF6B35] text-white' : 'bg-white/5 text-gray-400'}`}>Monthly</button>
+            </div>
+
+            {/* Categories */}
+            <div className="flex gap-2 mb-6">
+              {categories.map(c => (
+                <button key={c.id} onClick={() => setActiveCategory(c.id)} className={`px-3 py-1 rounded-lg text-sm ${activeCategory === c.id ? 'bg-white/10 text-white' : 'text-gray-400'}`}>
+                  {c.icon} {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Form */}
+            <div className="card">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {currentFields.map(field => (
+                  <div key={field.placeholder}>
+                    <label className="label">{field.name}</label>
+                    {field.type === 'select' ? (
+                      <select value={formData[field.placeholder] || ''} onChange={e => saveField(field.placeholder, e.target.value)} className="input-field">
+                        <option value="">Select...</option>
+                        <option value="↑">↑ Up</option>
+                        <option value="→">→ Stable</option>
+                        <option value="↓">↓ Down</option>
+                      </select>
+                    ) : (
+                      <input type="text" value={formData[field.placeholder] || ''} onChange={e => saveField(field.placeholder, e.target.value)} placeholder={field.example} className="input-field" />
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">{field.description}</p>
+                  </div>
+                ))}
+              </div>
+              {currentFields.length === 0 && (
+                <p className="text-gray-400 text-center py-8">No {activeTab} fields in this category.</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-20">
+            <p className="text-gray-400">Select a product from the sidebar</p>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
+DASHBOARDCLIENT
+
+# ============================================
+# src/app/admin/page.tsx
+# ============================================
+cat > src/app/admin/page.tsx << 'ADMINPAGE'
+import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth'
+import AdminClient from './AdminClient'
+
+export default async function AdminPage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/auth/login')
+  if (user.role !== 'admin') redirect('/dashboard')
+
+  return <AdminClient user={{ email: user.email, name: user.name }} />
+}
+ADMINPAGE
+
+# ============================================
+# src/app/admin/AdminClient.tsx
+# ============================================
+cat > src/app/admin/AdminClient.tsx << 'ADMINCLIENT'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
+interface ProductStat {
+  productId: string
+  productName: string
+  slideNumber: number
+  filledFields: number
+  totalFields: number
+  operators: { email: string; name: string }[]
+}
+
+interface Generation {
+  id: string
+  periodType: string
+  periodStart: string
+  status: string
+  slidesUrl: string | null
+  createdAt: string
+}
+
+export default function AdminClient({ user }: { user: { email: string; name: string } }) {
+  const [stats, setStats] = useState<ProductStat[]>([])
+  const [generations, setGenerations] = useState<Generation[]>([])
+  const [periodType, setPeriodType] = useState<'weekly' | 'monthly'>('weekly')
+  const [generating, setGenerating] = useState(false)
+  const router = useRouter()
+
+  const getPeriodStart = (type: 'weekly' | 'monthly') => {
+    const now = new Date()
+    if (type === 'weekly') {
+      const day = now.getDay()
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+      return new Date(now.setDate(diff)).toISOString().split('T')[0]
+    }
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  }
+
+  useEffect(() => {
+    loadStats()
+  }, [periodType])
+
+  const loadStats = async () => {
+    const res = await fetch(`/api/admin/stats?periodType=${periodType}&periodStart=${getPeriodStart(periodType)}`)
+    const data = await res.json()
+    setStats(data.stats || [])
+    setGenerations(data.generations || [])
+  }
+
+  const generateDeck = async () => {
+    setGenerating(true)
+    const res = await fetch('/api/generate-deck', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodType, periodStart: getPeriodStart(periodType) }),
+    })
+    const data = await res.json()
+    if (data.url) {
+      window.open(data.url, '_blank')
+    }
+    loadStats()
+    setGenerating(false)
+  }
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/auth/login')
+    router.refresh()
+  }
+
+  const totalFilled = stats.reduce((a, s) => a + s.filledFields, 0)
+  const totalFields = stats.reduce((a, s) => a + s.totalFields, 0)
+  const progress = totalFields > 0 ? Math.round((totalFilled / totalFields) * 100) : 0
+
+  return (
+    <div className="min-h-screen flex">
+      {/* Sidebar */}
+      <aside className="w-64 bg-[#16213e] border-r border-white/10 p-4 flex flex-col">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-[#FF6B35] rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold">M</span>
+          </div>
+          <div>
+            <h1 className="font-bold text-white">MoxyWolf</h1>
+            <p className="text-xs text-[#FF6B35]">Admin</p>
+          </div>
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="border-t border-white/10 pt-4">
+          <p className="text-sm text-white truncate">{user.name || user.email}</p>
+          <button onClick={logout} className="text-sm text-gray-400 hover:text-white">Sign out</button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 p-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Board Deck Overview</h1>
+            <p className="text-gray-400">Monitor progress and generate decks</p>
+          </div>
+          <div className="flex gap-3">
+            <select value={periodType} onChange={e => setPeriodType(e.target.value as any)} className="input-field w-auto">
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <button onClick={generateDeck} disabled={generating || progress < 100} className={`btn-primary ${progress < 100 ? 'opacity-50' : ''}`}>
+              {generating ? 'Generating...' : 'Generate Deck'}
+            </button>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div className="card mb-8">
+          <div className="flex justify-between mb-2">
+            <span className="text-white font-medium">{periodType === 'weekly' ? 'Weekly' : 'Monthly'} Progress</span>
+            <span className="text-[#FF6B35]">{progress}%</span>
+          </div>
+          <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-full bg-[#FF6B35] transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="text-sm text-gray-400 mt-2">{totalFilled} of {totalFields} fields</p>
+        </div>
+
+        {/* Products */}
+        <h2 className="text-lg font-semibold text-white mb-4">Product Status</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          {stats.map(s => {
+            const pct = s.totalFields > 0 ? Math.round((s.filledFields / s.totalFields) * 100) : 0
+            return (
+              <div key={s.productId} className="card">
+                <div className="flex justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-white">{s.productName}</h3>
+                    <p className="text-sm text-gray-400">Slide {s.slideNumber}</p>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs ${pct === 100 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                    {pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#FF6B35]" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Operators: {s.operators.length > 0 ? s.operators.map(o => o.name || o.email.split('@')[0]).join(', ') : 'None'}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Recent Generations */}
+        {generations.length > 0 && (
+          <>
+            <h2 className="text-lg font-semibold text-white mb-4">Recent Generations</h2>
+            <div className="card overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-sm text-gray-400 border-b border-white/10">
+                    <th className="pb-2">Date</th>
+                    <th className="pb-2">Type</th>
+                    <th className="pb-2">Status</th>
+                    <th className="pb-2">Link</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {generations.map(g => (
+                    <tr key={g.id} className="border-b border-white/5">
+                      <td className="py-2 text-white">{new Date(g.createdAt).toLocaleDateString()}</td>
+                      <td className="py-2 text-gray-300 capitalize">{g.periodType}</td>
+                      <td className="py-2">
+                        <span className={`px-2 py-0.5 rounded text-xs ${g.status === 'completed' ? 'bg-green-500/20 text-green-400' : g.status === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                          {g.status}
+                        </span>
+                      </td>
+                      <td className="py-2">
+                        {g.slidesUrl ? <a href={g.slidesUrl} target="_blank" className="text-[#FF6B35] hover:underline">Open</a> : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  )
+}
+ADMINCLIENT
+
+# ============================================
+# scripts/seed.js - Seed admin user
+# ============================================
+mkdir -p scripts
+cat > scripts/seed.js << 'SEEDJS'
+const Database = require('@replit/database')
+const bcrypt = require('bcryptjs')
+
+async function seed() {
+  const db = new Database()
+
+  const adminEmail = process.env.ADMIN_EMAIL || 'dorianc@moxywolf.com'
+  const adminPassword = process.env.ADMIN_PASSWORD || 'changeme123'
+
+  const existing = await db.get(`user:${adminEmail.toLowerCase()}`)
+  if (existing) {
+    console.log('Admin user already exists')
+    return
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 10)
+
+  await db.set(`user:${adminEmail.toLowerCase()}`, {
+    email: adminEmail.toLowerCase(),
+    password: hashedPassword,
+    name: 'Dorian',
+    role: 'admin',
+    products: [],
+    createdAt: new Date().toISOString(),
+  })
+
+  console.log(`✅ Admin user created: ${adminEmail}`)
+  console.log(`   Password: ${adminPassword}`)
+  console.log('   (Change this password after first login!)')
+}
+
+seed().catch(console.error)
+SEEDJS
+
+# ============================================
+# .gitignore
+# ============================================
+cat > .gitignore << 'GITIGNORE'
+node_modules
+.next
+.env
+.env.local
+GITIGNORE
+
+echo ""
+echo "✅ All files created!"
+echo ""
+echo "📦 Installing dependencies..."
+npm install
+
+echo ""
+echo "🌱 Creating admin user..."
+ADMIN_EMAIL="dorianc@moxywolf.com" ADMIN_PASSWORD="moxywolf2026" node scripts/seed.js
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🎉 SETUP COMPLETE!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Admin Login:"
+echo "  Email: dorianc@moxywolf.com"
+echo "  Password: moxywolf2026"
+echo ""
+echo "Optional: Add these Secrets for Google Slides integration:"
+echo "  GOOGLE_CLIENT_ID"
+echo "  GOOGLE_CLIENT_SECRET"
+echo "  GOOGLE_REFRESH_TOKEN"
+echo "  GOOGLE_SLIDES_TEMPLATE_ID=1VXqTm6hJPrwQ9doQeBTmoy2doKYUK7ZC3aVVhO4h6tM"
+echo ""
+echo "Click 'Run' to start the app!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
