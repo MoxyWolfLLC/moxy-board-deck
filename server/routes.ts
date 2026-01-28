@@ -48,6 +48,9 @@ export async function registerRoutes(
     })
   );
 
+  // Initialize persistent storage with seed data
+  await storage.init();
+
   // Auth middleware
   const requireAuth = (req: Request, res: Response, next: NextFunction) => {
     if (!req.session.userId) {

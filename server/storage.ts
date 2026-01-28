@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import Database from "@replit/database";
 import type { User, InsertUser, Submission, InsertSubmission, DeckGeneration, FinancialRecord, InsertFinancialRecord } from "@shared/schema";
 
 export interface IStorage {
@@ -27,54 +28,89 @@ export interface IStorage {
   getAllFinancialRecords(): Promise<FinancialRecord[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private submissions: Map<string, Submission>;
-  private generations: Map<string, DeckGeneration>;
-  private financials: Map<string, FinancialRecord>;
+// Helper to unwrap Replit DB results
+async function dbGet<T>(db: Database, key: string): Promise<T | null> {
+  try {
+    const result = await db.get(key);
+    if (result && typeof result === 'object' && 'ok' in result) {
+      return result.ok ? (result as any).value : null;
+    }
+    return result as T | null;
+  } catch {
+    return null;
+  }
+}
+
+async function dbList(db: Database, prefix: string): Promise<string[]> {
+  try {
+    const result = await db.list(prefix);
+    if (result && typeof result === 'object' && 'ok' in result) {
+      return result.ok ? (result as any).value : [];
+    }
+    return (result as string[]) || [];
+  } catch {
+    return [];
+  }
+}
+
+export class ReplitDBStorage implements IStorage {
+  private db: Database;
+  private initialized: boolean = false;
 
   constructor() {
-    this.users = new Map();
-    this.submissions = new Map();
-    this.generations = new Map();
-    this.financials = new Map();
+    this.db = new Database();
+  }
 
-    // Seed an admin user for demo purposes
-    const adminId = randomUUID();
-    const adminUser: User = {
-      id: adminId,
-      email: "admin@moxywolf.com",
-      password: "YWRtaW4xMjM=", // base64 of "admin123"
-      name: "Admin User",
-      role: "admin",
-      products: ["stigviewer", "deepfeedback", "prmvp", "sams", "reggenome"],
-      createdAt: new Date().toISOString(),
-    };
-    this.users.set(adminId, adminUser);
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    
+    // Check if admin user exists
+    const adminExists = await this.getUserByEmail("admin@moxywolf.com");
+    if (!adminExists) {
+      const adminId = randomUUID();
+      const adminUser: User = {
+        id: adminId,
+        email: "admin@moxywolf.com",
+        password: "YWRtaW4xMjM=", // base64 of "admin123"
+        name: "Admin User",
+        role: "admin",
+        products: ["stigviewer", "deepfeedback", "prmvp", "sams", "reggenome"],
+        createdAt: new Date().toISOString(),
+      };
+      await this.db.set(`user:${adminId}`, adminUser);
+      await this.db.set(`user_email:${adminUser.email.toLowerCase()}`, adminId);
+    }
 
-    // Seed Dorian as operator with limited products
-    const dorianId = randomUUID();
-    const dorianUser: User = {
-      id: dorianId,
-      email: "dorianc@moxywolf.com",
-      password: "TGV0bWVpbjIzNCQ=", // base64 of "Letmein234$"
-      name: "Dorian C",
-      role: "operator",
-      products: ["stigviewer", "deepfeedback", "reggenome"],
-      createdAt: new Date().toISOString(),
-    };
-    this.users.set(dorianId, dorianUser);
+    // Check if Dorian user exists
+    const dorianExists = await this.getUserByEmail("dorianc@moxywolf.com");
+    if (!dorianExists) {
+      const dorianId = randomUUID();
+      const dorianUser: User = {
+        id: dorianId,
+        email: "dorianc@moxywolf.com",
+        password: "TGV0bWVpbjIzNCQ=", // base64 of "Letmein234$"
+        name: "Dorian Cougias",
+        role: "admin",
+        products: ["stigviewer", "deepfeedback", "reggenome"],
+        createdAt: new Date().toISOString(),
+      };
+      await this.db.set(`user:${dorianId}`, dorianUser);
+      await this.db.set(`user_email:${dorianUser.email.toLowerCase()}`, dorianId);
+    }
+
+    this.initialized = true;
   }
 
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const user = await dbGet<User>(this.db, `user:${id}`);
+    return user || undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email.toLowerCase() === email.toLowerCase()
-    );
+    const userId = await dbGet<string>(this.db, `user_email:${email.toLowerCase()}`);
+    if (!userId) return undefined;
+    return this.getUser(userId);
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -84,35 +120,55 @@ export class MemStorage implements IStorage {
       id,
       createdAt: new Date().toISOString(),
     };
-    this.users.set(id, user);
+    await this.db.set(`user:${id}`, user);
+    await this.db.set(`user_email:${user.email.toLowerCase()}`, id);
     return user;
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
-    const user = this.users.get(id);
+    const user = await this.getUser(id);
     if (!user) return undefined;
     
+    // If email is being updated, update the email index
+    if (updates.email && updates.email.toLowerCase() !== user.email.toLowerCase()) {
+      await this.db.delete(`user_email:${user.email.toLowerCase()}`);
+      await this.db.set(`user_email:${updates.email.toLowerCase()}`, id);
+    }
+    
     const updatedUser = { ...user, ...updates };
-    this.users.set(id, updatedUser);
+    await this.db.set(`user:${id}`, updatedUser);
     return updatedUser;
   }
 
   async deleteUser(id: string): Promise<boolean> {
-    return this.users.delete(id);
+    const user = await this.getUser(id);
+    if (!user) return false;
+    
+    await this.db.delete(`user:${id}`);
+    await this.db.delete(`user_email:${user.email.toLowerCase()}`);
+    return true;
   }
 
   async getAllUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
+    const keys = await dbList(this.db, "user:");
+    const users: User[] = [];
+    for (const key of keys) {
+      if (key.startsWith("user_email:")) continue; // Skip email index keys
+      const user = await dbGet<User>(this.db, key);
+      if (user) users.push(user);
+    }
+    return users;
   }
 
   // Submission operations
   private getSubmissionKey(productId: string, fieldName: string, periodStart: string): string {
-    return `${productId}:${fieldName}:${periodStart}`;
+    return `submission:${productId}:${fieldName}:${periodStart}`;
   }
 
   async getSubmission(productId: string, fieldName: string, periodStart: string): Promise<Submission | undefined> {
     const key = this.getSubmissionKey(productId, fieldName, periodStart);
-    return this.submissions.get(key);
+    const submission = await dbGet<Submission>(this.db, key);
+    return submission || undefined;
   }
 
   async setSubmission(insertSubmission: InsertSubmission): Promise<Submission> {
@@ -122,29 +178,45 @@ export class MemStorage implements IStorage {
       insertSubmission.periodStart
     );
     
+    const existing = await dbGet<Submission>(this.db, key);
+    
     const submission: Submission = {
       ...insertSubmission,
-      id: randomUUID(),
+      id: existing?.id || randomUUID(),
       updatedAt: new Date().toISOString(),
     };
     
-    this.submissions.set(key, submission);
+    await this.db.set(key, submission);
     return submission;
   }
 
   async getSubmissionsForProduct(productId: string, periodType: string, periodStart: string): Promise<Submission[]> {
-    return Array.from(this.submissions.values()).filter(
-      (sub) =>
-        sub.productId === productId &&
-        sub.periodType === periodType &&
-        sub.periodStart === periodStart
-    );
+    const prefix = `submission:${productId}:`;
+    const keys = await dbList(this.db, prefix);
+    const submissions: Submission[] = [];
+    
+    for (const key of keys) {
+      const submission = await dbGet<Submission>(this.db, key);
+      if (submission && submission.periodType === periodType && submission.periodStart === periodStart) {
+        submissions.push(submission);
+      }
+    }
+    
+    return submissions;
   }
 
   async getAllSubmissions(periodType: string, periodStart: string): Promise<Submission[]> {
-    return Array.from(this.submissions.values()).filter(
-      (sub) => sub.periodType === periodType && sub.periodStart === periodStart
-    );
+    const keys = await dbList(this.db, "submission:");
+    const submissions: Submission[] = [];
+    
+    for (const key of keys) {
+      const submission = await dbGet<Submission>(this.db, key);
+      if (submission && submission.periodType === periodType && submission.periodStart === periodStart) {
+        submissions.push(submission);
+      }
+    }
+    
+    return submissions;
   }
 
   // Deck generation operations
@@ -155,37 +227,46 @@ export class MemStorage implements IStorage {
       id,
       createdAt: new Date().toISOString(),
     };
-    this.generations.set(id, newGeneration);
+    await this.db.set(`generation:${id}`, newGeneration);
     return newGeneration;
   }
 
   async updateDeckGeneration(id: string, updates: Partial<DeckGeneration>): Promise<DeckGeneration | undefined> {
-    const generation = this.generations.get(id);
+    const generation = await dbGet<DeckGeneration>(this.db, `generation:${id}`);
     if (!generation) return undefined;
     
     const updatedGeneration = { ...generation, ...updates };
-    this.generations.set(id, updatedGeneration);
+    await this.db.set(`generation:${id}`, updatedGeneration);
     return updatedGeneration;
   }
 
   async getRecentGenerations(limit: number = 10): Promise<DeckGeneration[]> {
-    return Array.from(this.generations.values())
+    const keys = await dbList(this.db, "generation:");
+    const generations: DeckGeneration[] = [];
+    
+    for (const key of keys) {
+      const generation = await dbGet<DeckGeneration>(this.db, key);
+      if (generation) generations.push(generation);
+    }
+    
+    return generations
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
   }
 
   // Financial record operations
   private getFinancialKey(periodStart: string): string {
-    return periodStart.slice(0, 7); // "2026-01" format
+    return `financial:${periodStart.slice(0, 7)}`; // "financial:2026-01" format
   }
 
   async getFinancialRecord(period: string): Promise<FinancialRecord | undefined> {
-    return this.financials.get(period);
+    const record = await dbGet<FinancialRecord>(this.db, `financial:${period}`);
+    return record || undefined;
   }
 
   async setFinancialRecord(insertRecord: InsertFinancialRecord): Promise<FinancialRecord> {
     const key = this.getFinancialKey(insertRecord.periodStart);
-    const existing = this.financials.get(key);
+    const existing = await dbGet<FinancialRecord>(this.db, key);
     
     const record: FinancialRecord = {
       ...insertRecord,
@@ -193,14 +274,22 @@ export class MemStorage implements IStorage {
       updatedAt: new Date().toISOString(),
     };
     
-    this.financials.set(key, record);
+    await this.db.set(key, record);
     return record;
   }
 
   async getAllFinancialRecords(): Promise<FinancialRecord[]> {
-    return Array.from(this.financials.values())
+    const keys = await dbList(this.db, "financial:");
+    const records: FinancialRecord[] = [];
+    
+    for (const key of keys) {
+      const record = await dbGet<FinancialRecord>(this.db, key);
+      if (record) records.push(record);
+    }
+    
+    return records
       .sort((a, b) => new Date(b.periodStart).getTime() - new Date(a.periodStart).getTime());
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new ReplitDBStorage();

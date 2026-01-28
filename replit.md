@@ -21,8 +21,10 @@ MVP implementation with:
 - **State**: TanStack Query for server state, Zustand for auth
 
 ### Backend (Express)
-- **Auth**: Session-based with express-session
-- **Storage**: In-memory storage (MemStorage class)
+- **Auth**: Session-based with express-session (with secure cookie config for production)
+- **Storage**: Persistent storage using Replit Database (@replit/database)
+  - Key patterns: `user:{id}`, `user_email:{email}`, `submission:{productId}:{fieldName}:{periodStart}`, `generation:{id}`, `financial:{period}`
+  - Seed users are only created if they don't exist (preserves user changes across restarts)
 - **API**: RESTful endpoints under /api
 
 ### Data Models
