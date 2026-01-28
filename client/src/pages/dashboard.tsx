@@ -46,9 +46,12 @@ export default function DashboardPage() {
   }
 
   const userProducts = currentUser?.products || [];
-  const assignedProducts = userProducts.length > 0 
-    ? allProducts.filter(p => userProducts.includes(p.id))
-    : allProducts;
+  const isAdmin = currentUser?.role === "admin";
+  
+  // Admins see all products, operators only see assigned products
+  const assignedProducts = isAdmin 
+    ? allProducts 
+    : allProducts.filter(p => userProducts.includes(p.id));
 
   const weekStart = getCurrentWeekStart();
   const monthStart = getCurrentMonthStart();
@@ -152,13 +155,13 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {assignedProducts.length === 0 && (
+          {assignedProducts.length === 0 && !isAdmin && (
             <Card>
               <CardContent className="p-12 text-center">
                 <Package className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">No Products Assigned</h3>
                 <p className="text-muted-foreground">
-                  Contact an administrator to get products assigned to your account.
+                  No products assigned yet. Please contact your administrator.
                 </p>
               </CardContent>
             </Card>
@@ -180,7 +183,7 @@ function ProductCard({ product }: { product: Product }) {
     northstar: "bg-primary/10 text-primary",
   };
 
-  const categories = [...new Set(product.fields.map(f => f.category))];
+  const categories = Array.from(new Set(product.fields.map(f => f.category)));
 
   return (
     <Link href={`/submit/${product.id}`}>

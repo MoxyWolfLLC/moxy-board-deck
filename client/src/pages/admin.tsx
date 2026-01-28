@@ -42,8 +42,9 @@ import {
   FileText,
   Calendar
 } from "lucide-react";
-import type { User, DeckGeneration } from "@shared/schema";
+import type { User, DeckGeneration, FinancialRecord } from "@shared/schema";
 import { products, getCurrentWeekStart, getCurrentMonthStart } from "@shared/schema";
+import { DollarSign, ExternalLink } from "lucide-react";
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
@@ -61,6 +62,11 @@ export default function AdminPage() {
 
   const { data: generations, isLoading: generationsLoading } = useQuery<DeckGeneration[]>({
     queryKey: ["/api/admin/generations"],
+    enabled: currentUser?.role === "admin",
+  });
+
+  const { data: financials, isLoading: financialsLoading } = useQuery<FinancialRecord[]>({
+    queryKey: ["/api/admin/financials"],
     enabled: currentUser?.role === "admin",
   });
 
@@ -143,6 +149,10 @@ export default function AdminPage() {
               <FileText className="w-4 h-4 mr-2" />
               Deck Generations
             </TabsTrigger>
+            <TabsTrigger value="financials" data-testid="tab-financials">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Financials
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6">
@@ -206,6 +216,52 @@ export default function AdminPage() {
                       <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
                       <h3 className="text-lg font-medium text-foreground mb-2">No Generations</h3>
                       <p className="text-muted-foreground">Generate your first deck to see it here.</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="financials" className="space-y-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">LivePlan Financials</h2>
+                <p className="text-muted-foreground">Enter company financial data from LivePlan</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a 
+                  href="https://app.liveplan.com/company/a7882fa6-a2c9-4e4f-8b1d-d19f13b46edf/774f6dfd-46f7-4a97-9b1e-1694a86c775b/dashboard/overview" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" data-testid="button-open-liveplan">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open LivePlan
+                  </Button>
+                </a>
+                <FinancialEntryDialog />
+              </div>
+            </div>
+
+            {financialsLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-24 rounded-xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {financials?.map((record) => (
+                  <FinancialCard key={record.id} record={record} />
+                ))}
+                
+                {financials?.length === 0 && (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <DollarSign className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+                      <h3 className="text-lg font-medium text-foreground mb-2">No Financial Data</h3>
+                      <p className="text-muted-foreground">Add your first financial entry to see it here.</p>
                     </CardContent>
                   </Card>
                 )}
@@ -702,5 +758,325 @@ function GenerationCard({ generation }: { generation: DeckGeneration }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FinancialCard({ record }: { record: FinancialRecord }) {
+  const formatCurrency = (value: number) => {
+    const formatted = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.abs(value));
+    return value < 0 ? `-${formatted}` : formatted;
+  };
+
+  const periodLabel = new Date(record.periodStart + 'T00:00:00').toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+  });
+
+  return (
+    <Card data-testid={`card-financial-${record.id}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="font-medium text-foreground text-lg">{periodLabel}</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Updated: {new Date(record.updatedAt).toLocaleString()} by {record.updatedBy}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Revenue</p>
+                <p className="font-medium text-foreground">{formatCurrency(record.revenue)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Expenses</p>
+                <p className="font-medium text-foreground">{formatCurrency(record.expenses)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Operating Income</p>
+                <p className={`font-medium ${record.operatingIncome < 0 ? 'text-destructive' : 'text-green-500'}`}>
+                  {formatCurrency(record.operatingIncome)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Operating Margin</p>
+                <p className={`font-medium ${record.operatingMargin < 0 ? 'text-destructive' : 'text-green-500'}`}>
+                  {record.operatingMargin}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Net Profit</p>
+                <p className={`font-medium ${record.netProfit < 0 ? 'text-destructive' : 'text-green-500'}`}>
+                  {formatCurrency(record.netProfit)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cash Balance</p>
+                <p className={`font-medium ${record.cashBalance < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                  {formatCurrency(record.cashBalance)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Accounts Receivable</p>
+                <p className="font-medium text-foreground">{formatCurrency(record.accountsReceivable)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Days to Get Paid</p>
+                <p className="font-medium text-foreground">{record.daysToGetPaid} days</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FinancialEntryDialog() {
+  const [open, setOpen] = useState(false);
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear().toString());
+  const [month, setMonth] = useState((now.getMonth() + 1).toString().padStart(2, '0'));
+  
+  const [revenue, setRevenue] = useState("");
+  const [expenses, setExpenses] = useState("");
+  const [operatingIncome, setOperatingIncome] = useState("");
+  const [operatingMargin, setOperatingMargin] = useState("");
+  const [netProfit, setNetProfit] = useState("");
+  const [cashBalance, setCashBalance] = useState("");
+  const [accountsReceivable, setAccountsReceivable] = useState("");
+  const [daysToGetPaid, setDaysToGetPaid] = useState("");
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const periodStart = `${year}-${month}-01`;
+  const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+  const periodEnd = `${year}-${month}-${lastDay.toString().padStart(2, '0')}`;
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/admin/financials", {
+        periodStart,
+        periodEnd,
+        revenue: parseFloat(revenue) || 0,
+        expenses: parseFloat(expenses) || 0,
+        operatingIncome: parseFloat(operatingIncome) || 0,
+        operatingMargin: parseFloat(operatingMargin) || 0,
+        netProfit: parseFloat(netProfit) || 0,
+        cashBalance: parseFloat(cashBalance) || 0,
+        accountsReceivable: parseFloat(accountsReceivable) || 0,
+        daysToGetPaid: parseInt(daysToGetPaid) || 0,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/financials"] });
+      toast({
+        title: "Financial data saved",
+        description: "The financial record has been saved successfully.",
+      });
+      setOpen(false);
+      setRevenue("");
+      setExpenses("");
+      setOperatingIncome("");
+      setOperatingMargin("");
+      setNetProfit("");
+      setCashBalance("");
+      setAccountsReceivable("");
+      setDaysToGetPaid("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Save failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const years = Array.from({ length: 5 }, (_, i) => (now.getFullYear() - 2 + i).toString());
+  const months = [
+    { value: "01", label: "January" },
+    { value: "02", label: "February" },
+    { value: "03", label: "March" },
+    { value: "04", label: "April" },
+    { value: "05", label: "May" },
+    { value: "06", label: "June" },
+    { value: "07", label: "July" },
+    { value: "08", label: "August" },
+    { value: "09", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-add-financial">
+          <DollarSign className="h-4 w-4 mr-2" />
+          Add Entry
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Financial Data</DialogTitle>
+          <DialogDescription>Enter company financial data from LivePlan</DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Month</Label>
+              <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger data-testid="select-financial-month">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Year</Label>
+              <Select value={year} onValueChange={setYear}>
+                <SelectTrigger data-testid="select-financial-year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((y) => (
+                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="revenue">Revenue ($)</Label>
+              <Input
+                id="revenue"
+                type="number"
+                value={revenue}
+                onChange={(e) => setRevenue(e.target.value)}
+                placeholder="10558"
+                data-testid="input-revenue"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="expenses">Expenses & Costs ($)</Label>
+              <Input
+                id="expenses"
+                type="number"
+                value={expenses}
+                onChange={(e) => setExpenses(e.target.value)}
+                placeholder="11740"
+                data-testid="input-expenses"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="operatingIncome">Operating Income ($)</Label>
+              <Input
+                id="operatingIncome"
+                type="number"
+                value={operatingIncome}
+                onChange={(e) => setOperatingIncome(e.target.value)}
+                placeholder="-1183"
+                data-testid="input-operating-income"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="operatingMargin">Operating Margin (%)</Label>
+              <Input
+                id="operatingMargin"
+                type="number"
+                value={operatingMargin}
+                onChange={(e) => setOperatingMargin(e.target.value)}
+                placeholder="-11"
+                data-testid="input-operating-margin"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="netProfit">Net Profit ($)</Label>
+              <Input
+                id="netProfit"
+                type="number"
+                value={netProfit}
+                onChange={(e) => setNetProfit(e.target.value)}
+                placeholder="-1183"
+                data-testid="input-net-profit"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cashBalance">Cash Balance ($)</Label>
+              <Input
+                id="cashBalance"
+                type="number"
+                value={cashBalance}
+                onChange={(e) => setCashBalance(e.target.value)}
+                placeholder="-38593"
+                data-testid="input-cash-balance"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="accountsReceivable">Accounts Receivable ($)</Label>
+              <Input
+                id="accountsReceivable"
+                type="number"
+                value={accountsReceivable}
+                onChange={(e) => setAccountsReceivable(e.target.value)}
+                placeholder="10558"
+                data-testid="input-accounts-receivable"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="daysToGetPaid">Days to Get Paid</Label>
+              <Input
+                id="daysToGetPaid"
+                type="number"
+                value={daysToGetPaid}
+                onChange={(e) => setDaysToGetPaid(e.target.value)}
+                placeholder="31"
+                data-testid="input-days-to-get-paid"
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => saveMutation.mutate()} 
+            disabled={saveMutation.isPending}
+            data-testid="button-save-financial"
+          >
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Entry"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,0 +1,128 @@
+Replit Agent Prompt: Product Assignment & LivePlan Integration
+Copy and paste this entire prompt to Replit Agent:
+
+Task: Add Product Assignment & LivePlan Financial Entry Features
+I need to add two major features to the MoxyWolf Board Deck app:
+Feature 1: Admin-Controlled Product Assignment
+Current Problem: All operators see all 5 products. I need operators to ONLY see products that an admin has assigned to them.
+Requirements:
+
+Create /admin/users page (admin-only) with:
+
+Table listing all registered users (name, email, role, assigned products)
+For each user, show checkboxes for each product (STIGViewer, DeepFeedback, PRMVP, SAMS, RegGenome)
+Ability to toggle user role between "admin" and "operator"
+"Save" button to persist changes
+Use the existing dark theme with MoxyWolf orange (#FF6B35) accents
+
+
+Create API endpoints:
+
+GET /api/admin/users - List all users with their product assignments
+PUT /api/admin/users/[email] - Update a user's products array and/or role
+DELETE /api/admin/users/[email] - Remove a user (optional)
+
+
+Update the Dashboard (/dashboard):
+
+Fetch the current user's products array from their user record
+Filter product cards to ONLY show products in their products array
+If products array is empty or undefined, show: "No products assigned yet. Please contact your administrator."
+Admin users should still see all products
+
+
+Database: The user record already has a products field. Use it like this:
+
+   user:email@example.com = {
+     email: 'email@example.com',
+     name: 'User Name',
+     role: 'operator',  // or 'admin'
+     products: ['stigviewer', 'prmvp'],  // only these products visible
+     ...
+   }
+Feature 2: LivePlan Financial Data Entry
+Purpose: Admin needs to manually enter company financial data from LivePlan for the board deck.
+Requirements:
+
+Create /admin/financials page (admin-only) with:
+
+Period selector (month/year dropdown, default to current month)
+Form with these fields:
+
+Revenue (currency, e.g., $10,558)
+Expenses & Costs (currency)
+Operating Income (currency, can be negative)
+Operating Margin (percentage)
+Net Profit (currency, can be negative)
+Cash Balance (currency, can be negative)
+Accounts Receivable (currency)
+Days to Get Paid (number)
+
+
+"Save" button
+Link to LivePlan: https://app.liveplan.com/company/a7882fa6-a2c9-4e4f-8b1d-d19f13b46edf/774f6dfd-46f7-4a97-9b1e-1694a86c775b/dashboard/overview
+Show history of past financial entries
+
+
+Create API endpoints:
+
+GET /api/admin/financials - List all financial records
+GET /api/admin/financials/[period] - Get specific period
+POST /api/admin/financials - Create/update financial record
+
+
+Database storage pattern:
+
+   financials:2026-01 = {
+     periodStart: '2026-01-01',
+     periodEnd: '2026-01-31',
+     revenue: 10558,
+     expenses: 11740,
+     operatingIncome: -1183,
+     operatingMargin: -11,
+     netProfit: -1183,
+     cashBalance: -38593,
+     accountsReceivable: 10558,
+     daysToGetPaid: 31,
+     updatedAt: '2026-01-28T00:00:00Z',
+     updatedBy: 'dorianc@moxywolf.com'
+   }
+Feature 3: Update Admin Navigation
+Update the admin section to include navigation tabs/links:
+
+Overview (/admin) - Existing completion stats dashboard
+Users (/admin/users) - User management & product assignment
+Financials (/admin/financials) - LivePlan data entry
+Generate Deck (/admin/generate) - If exists, or add later
+
+Immediate Fix Required
+IMPORTANT: First, update my user account to have admin role. Run this:
+javascriptconst Database = require('@replit/database');
+const db = new Database();
+(async () => {
+  const user = await db.get('user:dorianc@moxywolf.com');
+  if (user) {
+    user.role = 'admin';
+    await db.set('user:dorianc@moxywolf.com', user);
+    console.log('Updated dorianc@moxywolf.com to admin role');
+  }
+})();
+Design Guidelines
+
+Keep the existing dark navy theme (#1A1A2E background)
+Use MoxyWolf orange (#FF6B35) for buttons and accents
+Cards should have the same style as existing product cards
+Forms should match the existing KPI submission form style
+All admin pages should check for admin role and redirect to dashboard if not admin
+
+Product IDs Reference
+Use these exact product IDs:
+
+stigviewer - STIGViewer (Slide #5)
+deepfeedback - DeepFeedback (Slide #6)
+prmvp - PRMVP (Slide #7)
+sams - SAMS (Slide #8)
+reggenome - RegGenome (Slide #9)
+
+
+Please implement these features. Start by fixing my admin role, then create the user management page, then the financials page.

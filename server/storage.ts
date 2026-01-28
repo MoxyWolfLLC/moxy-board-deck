@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { User, InsertUser, Submission, InsertSubmission, DeckGeneration } from "@shared/schema";
+import type { User, InsertUser, Submission, InsertSubmission, DeckGeneration, FinancialRecord, InsertFinancialRecord } from "@shared/schema";
 
 export interface IStorage {
   // User operations
@@ -20,17 +20,24 @@ export interface IStorage {
   createDeckGeneration(generation: Omit<DeckGeneration, "id" | "createdAt">): Promise<DeckGeneration>;
   updateDeckGeneration(id: string, updates: Partial<DeckGeneration>): Promise<DeckGeneration | undefined>;
   getRecentGenerations(limit?: number): Promise<DeckGeneration[]>;
+
+  // Financial record operations
+  getFinancialRecord(period: string): Promise<FinancialRecord | undefined>;
+  setFinancialRecord(record: InsertFinancialRecord): Promise<FinancialRecord>;
+  getAllFinancialRecords(): Promise<FinancialRecord[]>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private submissions: Map<string, Submission>;
   private generations: Map<string, DeckGeneration>;
+  private financials: Map<string, FinancialRecord>;
 
   constructor() {
     this.users = new Map();
     this.submissions = new Map();
     this.generations = new Map();
+    this.financials = new Map();
 
     // Seed an admin user for demo purposes
     const adminId = randomUUID();
@@ -165,6 +172,34 @@ export class MemStorage implements IStorage {
     return Array.from(this.generations.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
+  }
+
+  // Financial record operations
+  private getFinancialKey(periodStart: string): string {
+    return periodStart.slice(0, 7); // "2026-01" format
+  }
+
+  async getFinancialRecord(period: string): Promise<FinancialRecord | undefined> {
+    return this.financials.get(period);
+  }
+
+  async setFinancialRecord(insertRecord: InsertFinancialRecord): Promise<FinancialRecord> {
+    const key = this.getFinancialKey(insertRecord.periodStart);
+    const existing = this.financials.get(key);
+    
+    const record: FinancialRecord = {
+      ...insertRecord,
+      id: existing?.id || randomUUID(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    this.financials.set(key, record);
+    return record;
+  }
+
+  async getAllFinancialRecords(): Promise<FinancialRecord[]> {
+    return Array.from(this.financials.values())
+      .sort((a, b) => new Date(b.periodStart).getTime() - new Date(a.periodStart).getTime());
   }
 }
 

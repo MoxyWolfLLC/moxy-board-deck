@@ -4,7 +4,7 @@ import session from "express-session";
 import MemoryStore from "memorystore";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertUserSchema, loginSchema, insertSubmissionSchema } from "@shared/schema";
+import { insertUserSchema, loginSchema, insertSubmissionSchema, insertFinancialRecordSchema } from "@shared/schema";
 
 // Extend session type
 declare module "express-session" {
@@ -230,7 +230,7 @@ export async function registerRoutes(
   // Update a user (admin)
   app.patch("/api/admin/users/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const { name, role, products } = req.body;
 
       const updatedUser = await storage.updateUser(id, { name, role, products });
@@ -247,7 +247,7 @@ export async function registerRoutes(
   // Delete a user (admin)
   app.delete("/api/admin/users/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       // Don't allow deleting yourself
       if (id === req.session.userId) {
@@ -309,6 +309,57 @@ export async function registerRoutes(
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to generate deck" });
+    }
+  });
+
+  // ========================================
+  // Financial Routes
+  // ========================================
+
+  // Get all financial records
+  app.get("/api/admin/financials", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const records = await storage.getAllFinancialRecords();
+      res.json(records);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch financial records" });
+    }
+  });
+
+  // Get financial record for a specific period
+  app.get("/api/admin/financials/:period", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const period = req.params.period as string;
+      const record = await storage.getFinancialRecord(period);
+      if (!record) {
+        return res.status(404).json({ error: "Financial record not found" });
+      }
+      res.json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch financial record" });
+    }
+  });
+
+  // Create/update financial record
+  app.post("/api/admin/financials", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const data = insertFinancialRecordSchema.parse({
+        ...req.body,
+        updatedBy: user.email,
+      });
+
+      const record = await storage.setFinancialRecord(data);
+      res.json(record);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      res.status(500).json({ error: "Failed to save financial record" });
     }
   });
 

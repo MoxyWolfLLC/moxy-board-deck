@@ -78,6 +78,28 @@ export const deckGenerationSchema = z.object({
 
 export type DeckGeneration = z.infer<typeof deckGenerationSchema>;
 
+// Financial record (LivePlan data)
+export const financialRecordSchema = z.object({
+  id: z.string(),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  revenue: z.number(),
+  expenses: z.number(),
+  operatingIncome: z.number(),
+  operatingMargin: z.number(),
+  netProfit: z.number(),
+  cashBalance: z.number(),
+  accountsReceivable: z.number(),
+  daysToGetPaid: z.number(),
+  updatedAt: z.string(),
+  updatedBy: z.string(),
+});
+
+export const insertFinancialRecordSchema = financialRecordSchema.omit({ id: true, updatedAt: true });
+
+export type FinancialRecord = z.infer<typeof financialRecordSchema>;
+export type InsertFinancialRecord = z.infer<typeof insertFinancialRecordSchema>;
+
 // Products data
 function generateFields(prefix: string): FieldDefinition[] {
   return [
