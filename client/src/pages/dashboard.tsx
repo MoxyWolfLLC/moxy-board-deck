@@ -48,10 +48,8 @@ export default function DashboardPage() {
   const userProducts = currentUser?.products || [];
   const isAdmin = currentUser?.role === "admin";
   
-  // Admins see all products, operators only see assigned products
-  const assignedProducts = isAdmin 
-    ? allProducts 
-    : allProducts.filter(p => userProducts.includes(p.id));
+  // All users only see their assigned products
+  const assignedProducts = allProducts.filter(p => userProducts.includes(p.id));
 
   const weekStart = getCurrentWeekStart();
   const monthStart = getCurrentMonthStart();
