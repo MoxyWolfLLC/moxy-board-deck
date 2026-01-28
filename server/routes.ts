@@ -32,7 +32,13 @@ export async function registerRoutes(
   // Session middleware
   app.use(
     session({
-      cookie: { maxAge: 86400000 * 7 }, // 7 days
+      cookie: {
+        maxAge: 86400000 * 7, // 7 days
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      },
       store: new MemoryStoreSession({
         checkPeriod: 86400000, // prune expired entries every 24h
       }),
