@@ -1,0 +1,68 @@
+Replit Agent Prompt: Fix Product Assignment Bugs
+Copy and paste this to Replit Agent:
+
+Bug Fix: Product Assignment Not Working Correctly
+I found two bugs causing the dashboard to show incorrect product assignments:
+Bug 1: EditUserDialog State Not Resetting
+File: client/src/pages/admin.tsx
+Problem: The EditUserDialog component uses useState to initialize state from the user prop, but this only runs once when the component mounts. When editing a different user, the state doesn't update, causing stale/incorrect data to be displayed and potentially saved.
+Current buggy code (around line 512):
+typescriptfunction EditUserDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [name, setName] = useState(user.name);
+  const [role, setRole] = useState<"admin" | "operator">(user.role);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>(user.products);
+  // ... rest of component
+}
+Fix: Add a useEffect hook right after the useState declarations to sync state when the user prop changes:
+typescriptfunction EditUserDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [name, setName] = useState(user.name);
+  const [role, setRole] = useState<"admin" | "operator">(user.role);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>(user.products);
+
+  // ADD THIS useEffect to fix the bug:
+  useEffect(() => {
+    if (open) {
+      setName(user.name);
+      setRole(user.role);
+      setSelectedProducts(user.products || []);
+    }
+  }, [user.id, open, user.name, user.role, user.products]);
+
+  // ... rest of component
+}
+Make sure useEffect is imported from React at the top of the file if not already.
+
+Bug 2: "Assigned Products" Count Wrong for Admins
+File: client/src/pages/dashboard.tsx
+Problem: The dashboard header shows "Assigned Products: 5 products" for admin users, even when they only have 3 products assigned. This is because admins see ALL products (by design), but the count should reflect their ACTUAL assignments, not what's displayed.
+Current code (around lines 48-54):
+typescriptconst userProducts = currentUser?.products || [];
+const isAdmin = currentUser?.role === "admin";
+
+// Admins see all products, operators only see assigned products
+const assignedProducts = isAdmin
+  ? allProducts
+  : allProducts.filter(p => userProducts.includes(p.id));
+The display logic is fine (admins SHOULD see all products so they can oversee everything). But the COUNT in the header needs to show actual assignments.
+Fix: Update the "Assigned Products" count to use the user's actual products array, not the displayed products:
+Find where the "Assigned Products" card displays the count (probably something like assignedProducts.length or similar) and change it to:
+typescript// For the "Assigned Products" count in the header card:
+const actualAssignedCount = currentUser?.products?.length || 0;
+
+// Use actualAssignedCount for the display, not assignedProducts.length
+So the header card should show:
+
+"Assigned Products"
+{actualAssignedCount} products (shows 3 for my account)
+
+But the product CARDS below should still show all 5 for admins (current behavior is correct for the cards).
+
+Summary of Changes
+FileLineChangeclient/src/pages/admin.tsx~512Add useEffect to sync EditUserDialog stateclient/src/pages/dashboard.tsxHeader cardUse currentUser?.products?.length for count
+Expected Result After Fix
+
+Edit User Dialog: When I open the edit dialog for any user, it should show THAT user's current assignments, not stale data from a previously edited user.
+Dashboard Header: Should show "Assigned Products: 3 products" for my account (dorianc@moxywolf.com) since I have 3 products assigned (STIGViewer, DeepFeedback, RegGenome).
+Dashboard Product Cards: As an admin, I should still see all 5 product cards (this is correct current behavior for admins to oversee all products).
+
+Please implement both fixes.

@@ -42,7 +42,8 @@ Each product has fields across 4 categories:
 - North Star: Trend, Days to Revenue, Churn, etc.
 
 ## Demo Credentials
-- Admin: admin@moxywolf.com / admin123
+- Admin: admin@moxywolf.com / admin123 (5 products assigned)
+- Operator: dorianc@moxywolf.com / Letmein234$ (3 products: STIGViewer, DeepFeedback, RegGenome)
 
 ## Routes
 - `/` - Redirects to login

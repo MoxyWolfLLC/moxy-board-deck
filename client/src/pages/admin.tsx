@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -510,6 +510,15 @@ function EditUserDialog({ user, open, onOpenChange }: { user: User; open: boolea
   const [name, setName] = useState(user.name);
   const [role, setRole] = useState<"admin" | "operator">(user.role);
   const [selectedProducts, setSelectedProducts] = useState<string[]>(user.products);
+
+  // Sync state when user prop changes (fixes stale data when editing different users)
+  useEffect(() => {
+    if (open) {
+      setName(user.name);
+      setRole(user.role);
+      setSelectedProducts(user.products || []);
+    }
+  }, [user.id, open, user.name, user.role, user.products]);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();

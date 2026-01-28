@@ -52,15 +52,15 @@ export class MemStorage implements IStorage {
     };
     this.users.set(adminId, adminUser);
 
-    // Seed Dorian as admin
+    // Seed Dorian as operator with limited products
     const dorianId = randomUUID();
     const dorianUser: User = {
       id: dorianId,
       email: "dorianc@moxywolf.com",
       password: "TGV0bWVpbjIzNCQ=", // base64 of "Letmein234$"
       name: "Dorian C",
-      role: "admin",
-      products: ["stigviewer", "deepfeedback", "prmvp", "sams", "reggenome"],
+      role: "operator",
+      products: ["stigviewer", "deepfeedback", "reggenome"],
       createdAt: new Date().toISOString(),
     };
     this.users.set(dorianId, dorianUser);

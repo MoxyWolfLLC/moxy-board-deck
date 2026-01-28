@@ -133,7 +133,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Assigned Products</p>
-                    <p className="font-medium">{assignedProducts.length} products</p>
+                    <p className="font-medium">{currentUser?.products?.length || 0} products</p>
                   </div>
                 </div>
               </CardContent>
