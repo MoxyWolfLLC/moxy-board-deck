@@ -11,6 +11,12 @@ export default {
         sm: ".1875rem", /* 3px */
       },
       colors: {
+        moxy: {
+          orange: "#FF6B35",
+          "orange-dark": "#E55A2B",
+          dark: "#1a1a2e",
+          "dark-light": "#16213e",
+        },
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
